@@ -16,14 +16,34 @@ body { background: #f5f7fb; color: var(--sl-ink); }
   justify-content: center; margin-right: .55rem; width: 2.25rem;
 }
 
-.admin-shell { min-height: 100vh; }
+.admin-shell { display: flex; min-height: 100vh; }
 .admin-sidebar {
-  background: #0b1120; color: #cbd5e1; min-height: 100vh; position: sticky; top: 0;
+  background: #0b1120; color: #cbd5e1; display: flex; flex: 0 0 228px; flex-direction: column;
+  height: 100vh; position: sticky; top: 0; transition: flex-basis .22s ease, width .22s ease; width: 228px; z-index: 20;
 }
 .admin-sidebar .nav-link { border-radius: .7rem; color: #94a3b8; font-weight: 600; padding: .72rem .85rem; }
 .admin-sidebar .nav-link:hover, .admin-sidebar .nav-link.active { background: rgba(116,87,255,.18); color: #fff; }
 .admin-sidebar .nav-link i { margin-right: .7rem; }
-.admin-main { min-width: 0; }
+.admin-main { flex: 1 1 auto; min-width: 0; }
+.sidebar-brand-row { align-items: center; display: flex; justify-content: space-between; min-height: 2.5rem; }
+.sidebar-toggle { align-items: center; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-radius: .6rem; color: #94a3b8; display: inline-flex; height: 2rem; justify-content: center; transition: .2s ease; width: 2rem; }
+.sidebar-toggle:hover { background: rgba(116,87,255,.22); color: #fff; }
+.sidebar-account { margin-top: auto; }
+.profile-link { align-items: center; border-radius: .75rem; color: inherit; display: flex; gap: .65rem; padding: .55rem; text-decoration: none; }
+.profile-link:hover, .profile-link.active { background: rgba(116,87,255,.18); }
+.profile-avatar { align-items: center; background: linear-gradient(135deg,var(--sl-electric),var(--sl-cyan)); border-radius: .65rem; color: #fff; display: inline-flex; flex: 0 0 2.25rem; font-weight: 800; height: 2.25rem; justify-content: center; }
+.profile-avatar-lg { flex-basis: 3.25rem; font-size: 1.25rem; height: 3.25rem; }
+.profile-meta { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.profile-link > .bi { color: #64748b; font-size: .75rem; }
+.sidebar-action { align-items: center; display: flex; gap: .7rem; justify-content: center; }
+.admin-sidebar.is-collapsed { flex-basis: 78px; width: 78px; }
+.admin-sidebar.is-collapsed .brand-label, .admin-sidebar.is-collapsed .nav-label, .admin-sidebar.is-collapsed .profile-meta, .admin-sidebar.is-collapsed .profile-link > .bi { display: none; }
+.admin-sidebar.is-collapsed .sidebar-brand-row { flex-direction: column; gap: .7rem; }
+.admin-sidebar.is-collapsed .navbar-brand .brand-mark { margin-right: 0; }
+.admin-sidebar.is-collapsed .nav-link { align-items: center; display: flex; justify-content: center; padding-left: .65rem; padding-right: .65rem; }
+.admin-sidebar.is-collapsed .nav-link i { font-size: 1.15rem; margin-right: 0; }
+.admin-sidebar.is-collapsed .profile-link { justify-content: center; padding-left: 0; padding-right: 0; }
+.admin-sidebar.is-collapsed .sidebar-action .bi { margin: 0; }
 .metric-card, .panel-card { border: 1px solid rgba(15,23,42,.07); border-radius: 1rem; box-shadow: 0 12px 35px rgba(15,23,42,.055); }
 .metric-value { font-size: clamp(1.7rem, 4vw, 2.35rem); font-weight: 800; letter-spacing: -.06em; }
 .table > :not(caption) > * > * { padding: .85rem .75rem; }
@@ -96,7 +116,19 @@ body { background: #f5f7fb; color: var(--sl-ink); }
 .footer-github .bi { font-size: 1.15rem; }
 
 @media (max-width: 991.98px) {
-  .admin-sidebar { min-height: auto; position: relative; }
+  .admin-shell { display: block; }
+  .admin-sidebar, .admin-sidebar.is-collapsed { height: auto; min-height: auto; position: relative; width: 100%; }
+  .admin-sidebar.is-collapsed { flex-basis: auto; }
+  .admin-sidebar.is-collapsed .brand-label, .admin-sidebar.is-collapsed .nav-label, .admin-sidebar.is-collapsed .profile-link > .bi { display: initial; }
+  .admin-sidebar.is-collapsed .profile-meta { display: flex; }
+  .admin-sidebar.is-collapsed .sidebar-brand-row { flex-direction: row; }
+  .admin-sidebar.is-collapsed .navbar-brand .brand-mark { margin-right: .55rem; }
+  .admin-sidebar.is-collapsed .nav-link { justify-content: flex-start; padding: .72rem .85rem; }
+  .admin-sidebar.is-collapsed .nav-link i { font-size: 1rem; margin-right: .7rem; }
+  .admin-sidebar.is-collapsed .profile-link { justify-content: flex-start; padding: .55rem; }
+  .sidebar-toggle { display: none; }
+  .admin-sidebar nav { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .sidebar-account { margin-top: 1rem; }
   .hero { padding-top: 7rem; }
   .signal-canvas { gap: 1.1rem; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto auto; padding: 1.5rem; }
   .signal-lines { display: none; }.source-node { grid-column: 1 / span 2; grid-row: 1; }.core-node { grid-column: 1 / span 2; grid-row: 2; }.stats-node { grid-column: 1; grid-row: 3; }.api-node { grid-column: 2; grid-row: 3; }

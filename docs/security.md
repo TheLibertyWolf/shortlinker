@@ -26,7 +26,8 @@ The application never fetches destinations on the redirect path.
 
 ## Privacy
 
-Raw IP addresses are encrypted and removed after the configured retention window.
+Raw IP addresses are encrypted and removed after the configured retention window
+(configurable from 0 to 365 days).
 Visitor uniqueness uses an HMAC scoped to link and day. Country and aggregate data
 remain after the encrypted IP is deleted. Access to raw IP data requires a distinct
 permission and is not exposed by the current API.

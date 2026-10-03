@@ -1,4 +1,5 @@
 import type { UserSession } from "./types.js";
+import { localizeHtml, translate, type Locale } from "./i18n.js";
 
 export function escapeHtml(value: unknown): string {
   return String(value ?? "").replace(/[&<>'"]/g, (char) => ({
@@ -16,13 +17,15 @@ export function csrfField(token: string): string {
   return `<input type="hidden" name="csrf_token" value="${escapeHtml(token)}">`;
 }
 
-function head(title: string, turnstile = false): string {
-  return `<!doctype html><html lang="en"><head>
+function head(title: string, turnstile = false, locale: Locale = "en"): string {
+  return `<!doctype html><html lang="${locale}"><head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light dark"><title>${escapeHtml(title)} · Shortlinker</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <meta name="theme-color" content="#0b1120">
   <link rel="stylesheet" href="/assets/vendor/bootstrap/bootstrap.min.css">
   <link rel="stylesheet" href="/assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="/assets/app.css?v=20261004-2">
+  <link rel="stylesheet" href="/assets/app.css?v=20261004-3">
   ${turnstile ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ""}
   </head>`;
 }
@@ -35,30 +38,30 @@ const navItems = [
   ["/admin/api-clients", "braces", "API clients", "api.read"],
   ["/admin/abuse", "shield-exclamation", "Abuse", "abuse.manage"],
   ["/admin/audit", "journal-check", "Audit log", "audit.read"],
-  ["/admin/settings", "sliders", "Settings", "settings.read"],
-  ["/admin/security", "fingerprint", "Security", ""]
+  ["/admin/settings", "sliders", "Settings", "settings.read"]
 ] as const;
 
 export function adminLayout(title: string, active: string, session: UserSession, content: string): string {
   const nav = navItems.filter((item) => !item[3] || session.permissions.includes(item[3])).map(([href, glyph, label]) =>
-    `<a class="nav-link ${active === href ? "active" : ""}" href="${href}">${icon(glyph)}${label}</a>`).join("");
-  return `${head(title)}<body><div class="container-fluid admin-shell"><div class="row">
-    <aside class="col-lg-2 px-3 py-4 admin-sidebar">
-      <a href="/admin" class="navbar-brand text-white d-flex align-items-center mb-4"><span class="brand-mark">S</span>Shortlinker</a>
+    `<a class="nav-link ${active === href ? "active" : ""}" href="${href}" title="${escapeHtml(translate(session.locale, label))}">${icon(glyph)}<span class="nav-label">${escapeHtml(translate(session.locale, label))}</span></a>`).join("");
+  const localizedTitle = translate(session.locale, title);
+  const localizedContent = localizeHtml(session.locale, content);
+  return `${head(localizedTitle, false, session.locale)}<body><div class="admin-shell">
+    <aside id="adminSidebar" class="admin-sidebar px-3 py-4">
+      <div class="sidebar-brand-row mb-4"><a href="/admin" class="navbar-brand text-white d-flex align-items-center"><span class="brand-mark">S</span><span class="brand-label">Shortlinker</span></a><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="${escapeHtml(translate(session.locale,"Collapse sidebar"))}" title="${escapeHtml(translate(session.locale,"Collapse sidebar"))}">${icon("layout-sidebar-inset")}</button></div>
       <nav class="nav nav-pills flex-column gap-1">${nav}</nav>
-      <div class="mt-5 pt-4 border-top border-secondary-subtle small">
-        <div class="text-white fw-semibold">${escapeHtml(session.displayName)}</div>
-        <div class="text-secondary text-truncate">@${escapeHtml(session.username)} · ${escapeHtml(session.email)}</div>
-        <form action="/auth/logout" method="post" class="mt-3">${csrfField(session.csrfToken)}
-          <button class="btn btn-sm btn-outline-light w-100">${icon("box-arrow-right")} Sign out</button>
+      <div class="sidebar-account pt-3 border-top border-secondary-subtle small">
+        <a class="profile-link ${active==="/admin/profile"?"active":""}" href="/admin/profile" title="${escapeHtml(translate(session.locale,"Open profile"))}"><span class="profile-avatar">${escapeHtml(session.displayName.slice(0,1).toUpperCase())}</span><span class="profile-meta"><span class="text-white fw-semibold text-truncate">${escapeHtml(session.displayName)}</span><span class="text-secondary text-truncate">@${escapeHtml(session.username)}</span></span>${icon("chevron-right")}</a>
+        <form action="/auth/logout" method="post" class="mt-2">${csrfField(session.csrfToken)}
+          <button class="btn btn-sm btn-outline-light w-100 sidebar-action">${icon("box-arrow-right")}<span class="nav-label">${escapeHtml(translate(session.locale,"Sign out"))}</span></button>
         </form>
       </div>
     </aside>
-    <main class="col-lg-10 admin-main px-3 px-md-5 py-4 py-md-5">
-      <header class="d-flex align-items-center justify-content-between mb-4"><div><div class="text-uppercase text-secondary small fw-bold">Control plane</div><h1 class="h2 mb-0 fw-bold">${escapeHtml(title)}</h1></div><span class="badge rounded-pill text-bg-dark"><span class="pulse-dot me-2"></span>Live</span></header>
-      ${content}
+    <main class="admin-main px-3 px-md-5 py-4 py-md-5">
+      <header class="d-flex align-items-center justify-content-between mb-4"><div><div class="text-uppercase text-secondary small fw-bold">${escapeHtml(translate(session.locale,"Control plane"))}</div><h1 class="h2 mb-0 fw-bold">${escapeHtml(localizedTitle)}</h1></div><span class="badge rounded-pill text-bg-dark"><span class="pulse-dot me-2"></span>${escapeHtml(translate(session.locale,"Live"))}</span></header>
+      ${localizedContent}
     </main>
-  </div></div><script src="/assets/vendor/bootstrap/bootstrap.bundle.min.js"></script><script src="/assets/app.js?v=20261004-2"></script></body></html>`;
+  </div><script src="/assets/vendor/bootstrap/bootstrap.bundle.min.js"></script><script src="/assets/app.js?v=20261004-3"></script></body></html>`;
 }
 
 export function landingPage(): string {
@@ -145,9 +148,10 @@ function feature(glyph: string, title: string, copy: string): string {
   return `<div class="col-md-6 col-xl-4"><article class="card h-100 p-4"><div class="feature-icon mb-4">${icon(glyph)}</div><h3 class="h5 fw-bold">${title}</h3><p class="text-secondary mb-0">${copy}</p></article></div>`;
 }
 
-export function loginPage(options: { error?: string; turnstile?: { enabled: boolean; siteKey: string } }): string {
+export function loginPage(options: { error?: string; turnstile?: { enabled: boolean; siteKey: string }; locale?: Locale }): string {
   const turnstile = options.turnstile;
-  return `${head("Sign in", turnstile?.enabled)}<body class="bg-dark text-light"><main class="min-vh-100 d-flex align-items-center"><div class="container"><div class="row justify-content-center"><div class="col-md-7 col-lg-5 col-xl-4">
+  const locale = options.locale ?? "en";
+  const html = `${head(translate(locale,"Sign in"), turnstile?.enabled, locale)}<body class="bg-dark text-light"><main class="min-vh-100 d-flex align-items-center"><div class="container"><div class="row justify-content-center"><div class="col-md-7 col-lg-5 col-xl-4">
     <div class="text-center mb-4"><a href="/" class="navbar-brand text-white"><span class="brand-mark">S</span>Shortlinker</a></div>
     <div class="card border-0 shadow-lg rounded-4"><div class="card-body p-4 p-md-5"><h1 class="h3 fw-bold mb-2">Welcome back</h1><p class="text-secondary mb-4">Enter the protected control plane.</p>
       ${alert(options.error, "danger")}
@@ -157,13 +161,15 @@ export function loginPage(options: { error?: string; turnstile?: { enabled: bool
       <button class="btn btn-primary btn-lg w-100">Continue ${icon("arrow-right")}</button></form>
     </div></div><p class="text-secondary small text-center mt-4">Access restricted by network policy and multi-factor authentication.</p>
   </div></div></div></main></body></html>`;
+  return localizeHtml(locale, html);
 }
 
-export function mfaPage(error?: string): string {
-  return `${head("Two-factor authentication")}<body class="bg-dark"><main class="min-vh-100 d-flex align-items-center"><div class="container"><div class="row justify-content-center"><div class="col-md-6 col-lg-4"><div class="card border-0 rounded-4 shadow-lg"><div class="card-body p-5 text-center">
+export function mfaPage(error?: string, locale: Locale = "en"): string {
+  const html = `${head(translate(locale,"Two-factor authentication"), false, locale)}<body class="bg-dark"><main class="min-vh-100 d-flex align-items-center"><div class="container"><div class="row justify-content-center"><div class="col-md-6 col-lg-4"><div class="card border-0 rounded-4 shadow-lg"><div class="card-body p-5 text-center">
     <div class="feature-icon mx-auto mb-4">${icon("shield-lock")}</div><h1 class="h3 fw-bold">Security check</h1><p class="text-secondary">Enter your authenticator code or a recovery code.</p>${alert(error, "danger")}
     <form method="post" action="/auth/2fa"><input class="form-control form-control-lg text-center code-field my-4" name="code" autocomplete="one-time-code" inputmode="numeric" maxlength="19" required autofocus><button class="btn btn-primary btn-lg w-100">Verify</button></form>
   </div></div></div></div></div></main></body></html>`;
+  return localizeHtml(locale, html);
 }
 
 export function statusBadge(status: string): string {
@@ -171,6 +177,6 @@ export function statusBadge(status: string): string {
   return `<span class="badge badge-soft-${kind} rounded-pill">${escapeHtml(status)}</span>`;
 }
 
-export function pagination(page: number, hasNext: boolean, base: string): string {
-  return `<nav class="d-flex justify-content-between mt-4"><a class="btn btn-outline-secondary ${page <= 1 ? "disabled" : ""}" href="${base}?page=${page - 1}">${icon("arrow-left")} Previous</a><span class="text-secondary align-self-center">Page ${page}</span><a class="btn btn-outline-secondary ${!hasNext ? "disabled" : ""}" href="${base}?page=${page + 1}">Next ${icon("arrow-right")}</a></nav>`;
+export function pagination(page: number, hasNext: boolean, base: string, locale: Locale = "en"): string {
+  return `<nav class="d-flex justify-content-between mt-4"><a class="btn btn-outline-secondary ${page <= 1 ? "disabled" : ""}" href="${base}?page=${page - 1}">${icon("arrow-left")} ${translate(locale,"Previous")}</a><span class="text-secondary align-self-center">${translate(locale,"Page")} ${page}</span><a class="btn btn-outline-secondary ${!hasNext ? "disabled" : ""}" href="${base}?page=${page + 1}">${translate(locale,"Next")} ${icon("arrow-right")}</a></nav>`;
 }

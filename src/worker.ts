@@ -5,6 +5,7 @@ import geoip from "geoip-lite";
 import { closeConnections, db, getSetting, redis } from "./db.js";
 import { encrypt, hmacIp } from "./crypto.js";
 import { config } from "./config.js";
+import { clampRetentionDays } from "./validation.js";
 
 const group = "analytics";
 const consumer = `worker-${process.pid}-${randomUUID().slice(0, 8)}`;
@@ -51,7 +52,7 @@ async function processEvent(id: string, event: Record<string, string>): Promise<
 
 async function cleanExpiredData(): Promise<void> {
   const privacy = await getSetting("privacy", { rawIpRetentionDays: config.RAW_IP_RETENTION_DAYS });
-  const days = Math.max(0, Math.min(90, Number(privacy.rawIpRetentionDays)));
+  const days = clampRetentionDays(privacy.rawIpRetentionDays);
   await db.query("UPDATE click_events SET ip_ciphertext = NULL WHERE ip_ciphertext IS NOT NULL AND clicked_at < now() - ($1 || ' days')::interval", [days]);
   await db.query("DELETE FROM sessions WHERE expires_at < now() - interval '7 days' OR revoked_at < now() - interval '7 days'");
   await db.query("DELETE FROM login_challenges WHERE expires_at < now()");

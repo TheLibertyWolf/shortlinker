@@ -57,3 +57,9 @@ export function parseTags(raw: string | undefined): string[] {
   if (!raw) return [];
   return [...new Set(raw.split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean))].slice(0, 20);
 }
+
+export function clampRetentionDays(value: unknown): number {
+  const days = Number(value);
+  if (!Number.isFinite(days)) return 0;
+  return Math.max(0, Math.min(365, Math.trunc(days)));
+}

@@ -17,11 +17,15 @@ async function loginRateLimited(ip: string, identifier: string): Promise<boolean
   } catch { return false; }
 }
 
+function requestLocale(request: { cookies: Record<string, string | undefined> }): "en" | "fr" {
+  return request.cookies.shurl_locale === "fr" ? "fr" : "en";
+}
+
 export const authRoutes: FastifyPluginAsync = async (app) => {
   app.get("/auth/login", async (request, reply) => {
     if (!isAdminIp(request)) return reply.code(403).type("text/plain").send("Administration is not available from this network.");
     if (await loadSession(request)) return reply.redirect("/admin", 303);
-    return reply.type("text/html").send(loginPage({ turnstile: await turnstilePublicSettings() }));
+    return reply.type("text/html").send(loginPage({ turnstile: await turnstilePublicSettings(), locale: requestLocale(request) }));
   });
 
   app.post("/auth/login", async (request, reply) => {
@@ -32,18 +36,20 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const genericError = "Invalid credentials or security challenge.";
     if (await loginRateLimited(request.ip, identifier)) {
       await audit(request, "auth.login.rate_limited", { outcome: "failure", metadata: { identifierHash: sha256(identifier) } });
-      return reply.code(429).type("text/html").send(loginPage({ error: "Too many attempts. Try again later.", turnstile: await turnstilePublicSettings() }));
+      return reply.code(429).type("text/html").send(loginPage({ error: "Too many attempts. Try again later.", turnstile: await turnstilePublicSettings(), locale: requestLocale(request) }));
     }
     const turnstileOk = await verifyTurnstile(request, body["cf-turnstile-response"]);
-    const result = await db.query<{ id: string; password_hash: string; totp_enabled: boolean; status: string }>(
-      "SELECT id, password_hash, totp_enabled, status FROM users WHERE username = $1 OR email = $1", [identifier]
+    const result = await db.query<{ id: string; password_hash: string; totp_enabled: boolean; status: string; locale: "en" | "fr" }>(
+      "SELECT id, password_hash, totp_enabled, status, locale FROM users WHERE username = $1 OR email = $1", [identifier]
     );
     const user = result.rows[0];
     const passwordOk = user ? await verifyPassword(user.password_hash, password) : await verifyPassword(await hashPassword(randomToken()), password);
     if (!turnstileOk || !user || !passwordOk || user.status !== "active") {
       await audit(request, "auth.login.failed", { actorUserId: user?.id, outcome: "failure", metadata: { identifierHash: sha256(identifier), turnstileOk } });
-      return reply.code(401).type("text/html").send(loginPage({ error: genericError, turnstile: await turnstilePublicSettings() }));
+      return reply.code(401).type("text/html").send(loginPage({ error: genericError, turnstile: await turnstilePublicSettings(), locale: requestLocale(request) }));
     }
+
+    reply.setCookie("shurl_locale", user.locale, { path: "/", secure: config.isProduction, sameSite: "strict", maxAge: 31_536_000 });
 
     const passkeys = await db.query("SELECT 1 FROM webauthn_credentials WHERE user_id = $1 LIMIT 1", [user.id]);
     if (user.totp_enabled || passkeys.rowCount) {
@@ -59,13 +65,13 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     await createSession(request, reply, user.id, false);
     await db.query("UPDATE users SET last_login_at = now() WHERE id = $1", [user.id]);
     await audit(request, "auth.login.password", { actorUserId: user.id });
-    return reply.redirect("/admin/security", 303);
+    return reply.redirect("/admin/profile", 303);
   });
 
   app.get("/auth/2fa", async (request, reply) => {
     if (!isAdminIp(request)) return reply.code(403).send();
     if (!request.cookies.shurl_challenge) return reply.redirect("/auth/login", 303);
-    return reply.type("text/html").send(mfaPage());
+    return reply.type("text/html").send(mfaPage(undefined, requestLocale(request)));
   });
 
   app.post("/auth/2fa", async (request, reply) => {
@@ -94,7 +100,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
     if (!row || !valid) {
       await audit(request, "auth.mfa.failed", { actorUserId: row?.user_id, outcome: "failure" });
-      return reply.code(401).type("text/html").send(mfaPage("Invalid or expired code."));
+      return reply.code(401).type("text/html").send(mfaPage("Invalid or expired code.", requestLocale(request)));
     }
     await db.query("DELETE FROM login_challenges WHERE token_hash=$1", [sha256(challengeToken)]);
     reply.clearCookie("shurl_challenge", { path: "/auth" });

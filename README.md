@@ -13,6 +13,7 @@ asynchronous privacy-aware analytics, granular administration, and a scoped API.
 - Network-restricted Bootstrap administration with TOTP MFA and recovery codes
 - Optional Cloudflare Turnstile login protection with encrypted secret storage
 - Role permissions, per-user overrides, audit logs, and session revocation
+- English/French user preferences and self-service profile management
 - Versioned bearer API with scopes, IP allowlists, quotas, and idempotency
 - Abuse reporting and immediate link suspension
 

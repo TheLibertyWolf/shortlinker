@@ -17,6 +17,7 @@ curl --fail http://127.0.0.1:3000/health
 journalctl -u shortlinker -u shortlinker-worker --since today
 systemctl list-timers shortlinker-backup.timer
 npm run smoke
+npm run smoke:profile
 ```
 
 ## Deployment

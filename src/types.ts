@@ -4,6 +4,7 @@ export type UserSession = {
   username: string;
   email: string;
   displayName: string;
+  locale: "en" | "fr";
   permissions: string[];
   mfaVerified: boolean;
   requirePasswordChange: boolean;

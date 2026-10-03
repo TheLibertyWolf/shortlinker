@@ -13,7 +13,7 @@ const schema = z.object({
   APP_ENCRYPTION_KEY: z.string().min(40),
   IP_HASH_KEY: z.string().min(40),
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(12),
-  RAW_IP_RETENTION_DAYS: z.coerce.number().int().min(0).max(90).default(7),
+  RAW_IP_RETENTION_DAYS: z.coerce.number().int().min(0).max(365).default(7),
   TRUST_PROXY: z.string().default("127.0.0.1"),
   WEBAUTHN_RP_ID: z.string().default("shurl.be"),
   WEBAUTHN_RP_NAME: z.string().default("Shortlinker"),

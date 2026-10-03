@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendAllowedQuery, generateSlug, normalizeHostname, validateDestination, validateSlug } from "../src/validation.js";
+import { appendAllowedQuery, clampRetentionDays, generateSlug, normalizeHostname, validateDestination, validateSlug } from "../src/validation.js";
 
 describe("slug handling", () => {
   it("generates opaque Base62 slugs", () => {
@@ -39,5 +39,14 @@ describe("domain validation", () => {
   it("normalizes IDN and trailing dots", () => {
     expect(normalizeHostname("Example.COM.")).toBe("example.com");
     expect(normalizeHostname("münich.example")).toBe("xn--mnich-kva.example");
+  });
+});
+
+describe("privacy retention", () => {
+  it("clamps encrypted IP retention to 0–365 days", () => {
+    expect(clampRetentionDays(-2)).toBe(0);
+    expect(clampRetentionDays(30)).toBe(30);
+    expect(clampRetentionDays(365)).toBe(365);
+    expect(clampRetentionDays(900)).toBe(365);
   });
 });

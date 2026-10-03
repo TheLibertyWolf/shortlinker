@@ -13,7 +13,8 @@ function normalizeIp(value: string): string {
 
 export function isSecurityRoute(url: string): boolean {
   const path = url.split("?", 1)[0]!;
-  return path === "/admin/security" || path.startsWith("/admin/security/");
+  return path === "/admin/profile" || path.startsWith("/admin/profile/") ||
+    path === "/admin/security" || path.startsWith("/admin/security/");
 }
 
 export function ipMatchesCidrs(ipValue: string, cidrs: string[]): boolean {
@@ -64,10 +65,10 @@ export async function loadSession(request: FastifyRequest): Promise<UserSession 
   const token = request.cookies.shurl_session;
   if (!token) return null;
   const result = await db.query<{
-    session_id: string; user_id: string; username: string; email: string; display_name: string;
+    session_id: string; user_id: string; username: string; email: string; display_name: string; locale: "en" | "fr";
     csrf_token: string; mfa_verified: boolean; require_password_change: boolean; permissions: string[];
   }>(
-    `SELECT s.id AS session_id, u.id AS user_id, u.username::text, u.email::text, u.display_name, u.require_password_change,
+    `SELECT s.id AS session_id, u.id AS user_id, u.username::text, u.email::text, u.display_name, u.locale, u.require_password_change,
             s.csrf_token, s.mfa_verified,
             ARRAY(
               SELECT DISTINCT rp.permission_code
@@ -88,7 +89,7 @@ export async function loadSession(request: FastifyRequest): Promise<UserSession 
   if (!row) return null;
   void db.query("UPDATE sessions SET last_seen_at = now() WHERE id = $1 AND last_seen_at < now() - interval '5 minutes'", [row.session_id]);
   return {
-    sessionId: row.session_id, userId: row.user_id, username: row.username, email: row.email, displayName: row.display_name,
+    sessionId: row.session_id, userId: row.user_id, username: row.username, email: row.email, displayName: row.display_name, locale: row.locale,
     permissions: row.permissions ?? [], mfaVerified: row.mfa_verified, requirePasswordChange: row.require_password_change, csrfToken: row.csrf_token
   };
 }
@@ -105,12 +106,12 @@ export async function requireSession(request: FastifyRequest, reply: FastifyRepl
   }
   const securityRoute = isSecurityRoute(request.url);
   if (session.requirePasswordChange && !securityRoute) {
-    await reply.redirect("/admin/security", 303);
+    await reply.redirect("/admin/profile", 303);
     return null;
   }
   const security = await getSetting("security", { requireMfa: true });
   if (security.requireMfa && !session.mfaVerified && !securityRoute) {
-    await reply.redirect("/admin/security", 303);
+    await reply.redirect("/admin/profile", 303);
     return null;
   }
   if (permission && !session.permissions.includes(permission)) {

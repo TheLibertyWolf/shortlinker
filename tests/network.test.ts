@@ -19,6 +19,8 @@ describe("security route gate", () => {
     expect(isSecurityRoute("/admin/security?error=invalid")).toBe(true);
     expect(isSecurityRoute("/admin/security/password")).toBe(true);
     expect(isSecurityRoute("/admin/security/totp")).toBe(true);
+    expect(isSecurityRoute("/admin/profile")).toBe(true);
+    expect(isSecurityRoute("/admin/profile/password")).toBe(true);
     expect(isSecurityRoute("/admin/security-bypass")).toBe(false);
     expect(isSecurityRoute("/admin/users")).toBe(false);
   });

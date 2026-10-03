@@ -1,11 +1,11 @@
 import type { FastifyPluginAsync } from "fastify";
-import { verify as verifyTotp } from "otplib";
 import { db, redis } from "../db.js";
 import { audit } from "../audit.js";
 import { createSession, destroySession, isAdminIp, loadSession, turnstilePublicSettings, verifyCsrf, verifyTurnstile } from "../auth.js";
 import { decrypt, hashPassword, hmacIp, randomToken, sha256, verifyPassword } from "../crypto.js";
 import { loginPage, mfaPage } from "../ui.js";
 import { config } from "../config.js";
+import { verifyTotpToken } from "../totp.js";
 
 async function loginRateLimited(ip: string, identifier: string): Promise<boolean> {
   try {
@@ -86,7 +86,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const code = String((request.body as Record<string, string>).code ?? "").replace(/[\s-]/g, "");
     let valid = false;
     if (row?.totp_secret_encrypted && /^\d{6}$/.test(code)) {
-      valid = (await verifyTotp({ token: code, secret: decrypt(row.totp_secret_encrypted) })).valid;
+      valid = await verifyTotpToken(code, decrypt(row.totp_secret_encrypted));
     }
     if (row && !valid && /^[A-Z0-9]{12}$/.test(code.toUpperCase())) {
       const codes = await db.query<{ id: string; code_hash: string }>("SELECT id, code_hash FROM recovery_codes WHERE user_id=$1 AND used_at IS NULL", [row.user_id]);

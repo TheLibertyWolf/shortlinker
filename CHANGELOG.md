@@ -9,7 +9,7 @@ All notable changes are documented here. This project follows semantic versionin
 ### Changed
 
 - Updated production and development dependency groups after isolated compatibility testing.
-- Migrated TOTP generation and verification to the asynchronous otplib 13 API.
+- Migrated TOTP generation and verification to the asynchronous otplib 13 API while preserving enrolled 10-byte otplib 12 secrets.
 
 ### Security
 

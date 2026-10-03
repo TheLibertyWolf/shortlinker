@@ -36,7 +36,7 @@
     button.addEventListener("click", async () => {
       const selector = button.getAttribute("data-copy");
       const source = selector ? document.querySelector(selector) : null;
-      const value = source instanceof HTMLInputElement ? source.value : source?.textContent;
+      const value = source instanceof HTMLInputElement || source instanceof HTMLTextAreaElement ? source.value : source?.textContent;
       if (!value) return;
       await navigator.clipboard.writeText(value.trim());
       const original = button.innerHTML;
@@ -47,4 +47,23 @@
 
   const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
   if (window.bootstrap) [...tooltips].map((el) => new window.bootstrap.Tooltip(el));
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {}));
+  }
+
+  let installPrompt;
+  const installButton = document.querySelector("[data-pwa-install]");
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    installPrompt = event;
+    installButton?.classList.remove("d-none");
+  });
+  installButton?.addEventListener("click", async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    installPrompt = undefined;
+    installButton.classList.add("d-none");
+  });
+  window.addEventListener("appinstalled", () => installButton?.classList.add("d-none"));
 })();

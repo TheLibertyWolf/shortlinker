@@ -30,6 +30,19 @@ export function normalizeHostname(raw: string): string {
   return hostname;
 }
 
+export function validateHomepageRedirect(raw: string, attachedHostname: string): string {
+  const value = raw.trim();
+  if (!value) return "";
+  let url: URL;
+  try { url = new URL(value); } catch { throw new Error("Homepage redirect must be a valid absolute URL"); }
+  if (url.protocol !== "https:") throw new Error("Homepage redirect must use HTTPS");
+  if (url.username || url.password) throw new Error("Homepage redirect cannot contain credentials");
+  if (url.hostname.toLowerCase() === normalizeHostname(attachedHostname)) {
+    throw new Error("Homepage redirect cannot point to the attached domain itself");
+  }
+  return url.toString().replace(/\/$/, "");
+}
+
 export function validateDestination(raw: string, platformDomains: string[] = []): string {
   const value = raw.trim();
   if (value.length > 4096) throw new Error("Destination is too long");

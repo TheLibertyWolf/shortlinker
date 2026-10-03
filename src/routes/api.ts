@@ -154,7 +154,19 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
     const countries = await db.query(
       "SELECT country_code, count(*)::bigint AS clicks FROM click_events WHERE link_id=$1 GROUP BY country_code ORDER BY clicks DESC LIMIT 20", [request.params.id]
     );
-    return reply.send({ data: { ...result.rows[0], countries: countries.rows } });
+    const timeline = await db.query(
+      "SELECT to_char(date_trunc('day',clicked_at),'YYYY-MM-DD') AS day,count(*)::bigint AS clicks FROM click_events WHERE link_id=$1 AND clicked_at>=now()-interval '29 days' GROUP BY 1 ORDER BY 1", [request.params.id]
+    );
+    const browsers = await db.query(
+      "SELECT coalesce(nullif(browser,''),'Unknown') AS name,count(*)::bigint AS clicks FROM click_events WHERE link_id=$1 GROUP BY 1 ORDER BY clicks DESC LIMIT 10", [request.params.id]
+    );
+    const devices = await db.query(
+      "SELECT coalesce(nullif(device_type,''),'Unknown') AS name,count(*)::bigint AS clicks FROM click_events WHERE link_id=$1 GROUP BY 1 ORDER BY clicks DESC LIMIT 10", [request.params.id]
+    );
+    const referrers = await db.query(
+      "SELECT coalesce(nullif(referrer,''),'Direct') AS name,count(*)::bigint AS clicks FROM click_events WHERE link_id=$1 GROUP BY 1 ORDER BY clicks DESC LIMIT 10", [request.params.id]
+    );
+    return reply.send({ data: { ...result.rows[0], countries: countries.rows, timeline: timeline.rows, browsers: browsers.rows, devices: devices.rows, referrers: referrers.rows } });
   });
 
   app.delete<{ Params: { id: string } }>("/api/v1/links/:id", async (request, reply) => {

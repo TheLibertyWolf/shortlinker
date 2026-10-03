@@ -1,0 +1,20 @@
+{
+  "id": "/admin",
+  "name": "Shortlinker Control Plane",
+  "short_name": "Shortlinker",
+  "description": "Secure shortlink administration and analytics.",
+  "lang": "en",
+  "start_url": "/admin",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b1120",
+  "theme_color": "#0b1120",
+  "icons": [
+    { "src": "/assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Links", "url": "/admin/links" },
+    { "name": "Profile", "url": "/admin/profile" }
+  ]
+}

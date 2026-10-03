@@ -17,15 +17,16 @@ export function csrfField(token: string): string {
   return `<input type="hidden" name="csrf_token" value="${escapeHtml(token)}">`;
 }
 
-function head(title: string, turnstile = false, locale: Locale = "en"): string {
+function head(title: string, turnstile = false, locale: Locale = "en", pwa = false): string {
   return `<!doctype html><html lang="${locale}"><head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light dark"><title>${escapeHtml(title)} · Shortlinker</title>
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  ${pwa ? '<link rel="manifest" href="/assets/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/icons/icon-192.png">' : ""}
   <meta name="theme-color" content="#0b1120">
   <link rel="stylesheet" href="/assets/vendor/bootstrap/bootstrap.min.css">
   <link rel="stylesheet" href="/assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="/assets/app.css?v=20261004-3">
+  <link rel="stylesheet" href="/assets/app.css?v=20261004-4">
   ${turnstile ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ""}
   </head>`;
 }
@@ -46,11 +47,12 @@ export function adminLayout(title: string, active: string, session: UserSession,
     `<a class="nav-link ${active === href ? "active" : ""}" href="${href}" title="${escapeHtml(translate(session.locale, label))}">${icon(glyph)}<span class="nav-label">${escapeHtml(translate(session.locale, label))}</span></a>`).join("");
   const localizedTitle = translate(session.locale, title);
   const localizedContent = localizeHtml(session.locale, content);
-  return `${head(localizedTitle, false, session.locale)}<body><div class="admin-shell">
+  return `${head(localizedTitle, false, session.locale, true)}<body><div class="admin-shell">
     <aside id="adminSidebar" class="admin-sidebar px-3 py-4">
       <div class="sidebar-brand-row mb-4"><a href="/admin" class="navbar-brand text-white d-flex align-items-center"><span class="brand-mark">S</span><span class="brand-label">Shortlinker</span></a><button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="${escapeHtml(translate(session.locale,"Collapse sidebar"))}" title="${escapeHtml(translate(session.locale,"Collapse sidebar"))}">${icon("layout-sidebar-inset")}</button></div>
       <nav class="nav nav-pills flex-column gap-1">${nav}</nav>
       <div class="sidebar-account pt-3 border-top border-secondary-subtle small">
+        <button class="btn btn-sm btn-outline-info w-100 mb-2 sidebar-action d-none" type="button" data-pwa-install>${icon("download")}<span class="nav-label">${escapeHtml(translate(session.locale,"Install app"))}</span></button>
         <a class="profile-link ${active==="/admin/profile"?"active":""}" href="/admin/profile" title="${escapeHtml(translate(session.locale,"Open profile"))}"><span class="profile-avatar">${escapeHtml(session.displayName.slice(0,1).toUpperCase())}</span><span class="profile-meta"><span class="text-white fw-semibold text-truncate">${escapeHtml(session.displayName)}</span><span class="text-secondary text-truncate">@${escapeHtml(session.username)}</span></span>${icon("chevron-right")}</a>
         <form action="/auth/logout" method="post" class="mt-2">${csrfField(session.csrfToken)}
           <button class="btn btn-sm btn-outline-light w-100 sidebar-action">${icon("box-arrow-right")}<span class="nav-label">${escapeHtml(translate(session.locale,"Sign out"))}</span></button>
@@ -61,20 +63,20 @@ export function adminLayout(title: string, active: string, session: UserSession,
       <header class="d-flex align-items-center justify-content-between mb-4"><div><div class="text-uppercase text-secondary small fw-bold">${escapeHtml(translate(session.locale,"Control plane"))}</div><h1 class="h2 mb-0 fw-bold">${escapeHtml(localizedTitle)}</h1></div><span class="badge rounded-pill text-bg-dark"><span class="pulse-dot me-2"></span>${escapeHtml(translate(session.locale,"Live"))}</span></header>
       ${localizedContent}
     </main>
-  </div><script src="/assets/vendor/bootstrap/bootstrap.bundle.min.js"></script><script src="/assets/app.js?v=20261004-3"></script></body></html>`;
+  </div><script src="/assets/vendor/bootstrap/bootstrap.bundle.min.js"></script><script src="/assets/app.js?v=20261004-4"></script></body></html>`;
 }
 
 export function landingPage(): string {
   return `${head("High-performance links")}<body class="landing">
   <nav class="navbar navbar-expand-lg navbar-dark fixed-top"><div class="container py-2">
     <a class="navbar-brand" href="/"><span class="brand-mark">S</span>shurl.be</a>
-    <div class="ms-auto d-flex gap-2"><a href="#platform" class="btn btn-link text-light text-decoration-none">Platform</a><a href="/api/v1" class="btn btn-link text-light text-decoration-none d-none d-md-inline-flex">API</a><a href="/auth/login" class="btn btn-outline-light rounded-pill px-4">Admin</a></div>
+    <div class="ms-auto d-flex gap-2"><a href="#platform" class="btn btn-link text-light text-decoration-none">Platform</a><a href="/auth/login" class="btn btn-outline-light rounded-pill px-4">Admin</a></div>
   </div></nav>
   <main><section class="hero"><div class="hero-grid"></div><div class="container position-relative">
     <div class="hero-copy-block text-center mx-auto"><div class="hero-kicker mb-4"><span class="pulse-dot me-3"></span>The link intelligence layer</div>
       <h1>Shorten the URL.<br><span class="gradient-text">Expand the signal.</span></h1>
       <p class="hero-copy mx-auto my-4">Turn unwieldy destinations into instant, measurable routes. One compact link feeds real-time intelligence, secure automation, and decisions that move at click speed.</p>
-      <div class="d-flex justify-content-center flex-wrap gap-3"><a href="#flow" class="btn btn-primary btn-lg rounded-pill px-4">See the signal flow ${icon("arrow-down-right")}</a><a href="/api/v1" class="btn btn-outline-light btn-lg rounded-pill px-4">Explore the API</a></div>
+      <div class="d-flex justify-content-center flex-wrap gap-3"><a href="#flow" class="btn btn-primary btn-lg rounded-pill px-4">See the signal flow ${icon("arrow-down-right")}</a></div>
     </div>
 
     <div id="flow" class="signal-board mt-5" aria-label="A long URL is transformed into a short link connected to analytics and API services">

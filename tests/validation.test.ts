@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendAllowedQuery, clampRetentionDays, generateSlug, normalizeHostname, validateDestination, validateSlug } from "../src/validation.js";
+import { appendAllowedQuery, clampRetentionDays, generateSlug, normalizeHostname, validateDestination, validateHomepageRedirect, validateSlug } from "../src/validation.js";
 
 describe("slug handling", () => {
   it("generates opaque Base62 slugs", () => {
@@ -39,6 +39,12 @@ describe("domain validation", () => {
   it("normalizes IDN and trailing dots", () => {
     expect(normalizeHostname("Example.COM.")).toBe("example.com");
     expect(normalizeHostname("münich.example")).toBe("xn--mnich-kva.example");
+  });
+
+  it("accepts an external HTTPS homepage and rejects redirect loops", () => {
+    expect(validateHomepageRedirect("https://shurl.be/", "links.example.com")).toBe("https://shurl.be");
+    expect(() => validateHomepageRedirect("https://links.example.com", "links.example.com")).toThrow(/itself/);
+    expect(() => validateHomepageRedirect("http://shurl.be", "links.example.com")).toThrow(/HTTPS/);
   });
 });
 

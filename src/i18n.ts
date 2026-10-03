@@ -16,6 +16,7 @@ const french: Record<string, string> = {
   "Open profile": "Ouvrir le profil",
   "Collapse sidebar": "Rétracter la barre latérale",
   "Expand sidebar": "Déplier la barre latérale",
+  "Install app": "Installer l’application",
   "Links online": "Liens actifs",
   "Clicks today": "Clics aujourd’hui",
   "Total events": "Événements totaux",

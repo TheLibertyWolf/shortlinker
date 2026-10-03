@@ -47,7 +47,17 @@ await app.register(fastifyStatic, {
   root: join(root, "public", "assets"),
   prefix: "/assets/",
   maxAge: config.isProduction ? "1h" : 0,
-  immutable: false
+  immutable: false,
+  setHeaders: (response, pathName) => {
+    if (pathName.endsWith("sw.js")) {
+      response.header("Service-Worker-Allowed", "/");
+      response.header("Cache-Control", "no-cache");
+    }
+  }
+});
+
+app.get("/sw.js", async (_request, reply) => {
+  return reply.header("Service-Worker-Allowed", "/").header("Cache-Control", "no-cache").type("application/javascript").sendFile("sw.js");
 });
 
 app.addHook("onRequest", async (request, reply) => {

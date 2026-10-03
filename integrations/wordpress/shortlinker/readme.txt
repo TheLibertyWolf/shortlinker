@@ -4,7 +4,7 @@ Tags: shortlink, analytics, url shortener, shurl, api
 Requires at least: 6.5
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -31,6 +31,10 @@ Every state-changing action uses WordPress capabilities and nonces. Protect Word
 and database access because the API token is stored in the WordPress options table.
 
 == Changelog ==
+
+= 1.1.1 =
+* Added a native Gutenberg Document sidebar panel for generating, displaying and regenerating shortlinks.
+* Kept the side meta box for the Classic Editor.
 
 = 1.1.0 =
 * Added a full-width top-level statistics page.

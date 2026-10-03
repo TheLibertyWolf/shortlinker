@@ -4,6 +4,17 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-04
+
+### Added
+
+- WordPress plugin 1.1.1 with a native Gutenberg Document sidebar panel for generating, displaying, and regenerating shortlinks.
+
+### Changed
+
+- The WordPress editor control now reacts immediately when a draft is published without requiring a page reload.
+- The Classic Editor retains its dedicated side meta box.
+
 ## [0.3.0] - 2026-10-04
 
 ### Added

@@ -3,7 +3,7 @@
  * Plugin Name: Shortlinker
  * Plugin URI: https://shurl.be/
  * Description: Generate and monitor shurl.be shortlinks directly from WordPress.
- * Version: 1.1.0
+ * Version: 1.1.1
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Author: Jessy System
@@ -16,7 +16,7 @@
 defined('ABSPATH') || exit;
 
 final class Shortlinker_WordPress {
-    const VERSION = '1.1.0';
+    const VERSION = '1.1.1';
     const OPTION = 'shortlinker_settings';
     const UPDATE_MANIFEST = 'https://shurl.be/assets/wordpress-plugin.json';
     const META_ID = '_shortlinker_id';
@@ -34,6 +34,7 @@ final class Shortlinker_WordPress {
         add_action('init', array($plugin, 'register_list_columns'), 100);
         add_action('add_meta_boxes', array($plugin, 'add_meta_boxes'));
         add_action('admin_enqueue_scripts', array($plugin, 'enqueue_assets'));
+        add_action('enqueue_block_editor_assets', array($plugin, 'enqueue_block_editor_assets'));
         add_action('wp_ajax_shortlinker_generate', array($plugin, 'ajax_generate'));
         add_action('admin_post_shortlinker_bulk_generate', array($plugin, 'bulk_generate'));
         add_action('admin_post_shortlinker_check_update', array($plugin, 'check_update_now'));
@@ -123,6 +124,27 @@ final class Shortlinker_WordPress {
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('shortlinker_editor'),
             'generating' => __('Generating…', 'shortlinker'),
+            'confirmRegenerate' => __('The current shortlink will stop working. Regenerate it?', 'shortlinker'),
+            'error' => __('The operation failed.', 'shortlinker'),
+        ));
+    }
+
+    public function enqueue_block_editor_assets() {
+        if (!$this->can_configure()) return;
+        $screen = get_current_screen();
+        if (!$screen || !in_array($screen->post_type, $this->selected_post_types(), true)) return;
+        global $post;
+        $post_id = $post instanceof WP_Post ? $post->ID : get_the_ID();
+        if (!$post_id) return;
+        wp_enqueue_script('shortlinker-block-editor', plugins_url('assets/editor.js', __FILE__), array('wp-plugins', 'wp-edit-post', 'wp-element', 'wp-components', 'wp-data'), self::VERSION, true);
+        wp_localize_script('shortlinker-block-editor', 'ShortlinkerEditor', array(
+            'ajaxUrl' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('shortlinker_editor'),
+            'postId' => (int) $post_id,
+            'url' => (string) get_post_meta($post_id, self::META_URL, true),
+            'clicks' => (int) get_post_meta($post_id, self::META_CLICKS, true),
+            'generating' => __('Generating…', 'shortlinker'), 'generate' => __('Generate shortlink', 'shortlinker'),
+            'regenerate' => __('Regenerate', 'shortlinker'), 'clickLabel' => __('clicks', 'shortlinker'),
+            'publishFirst' => __('Publish this content first.', 'shortlinker'),
             'confirmRegenerate' => __('The current shortlink will stop working. Regenerate it?', 'shortlinker'),
             'error' => __('The operation failed.', 'shortlinker'),
         ));
@@ -235,7 +257,8 @@ final class Shortlinker_WordPress {
     public function add_meta_boxes() {
         if (!$this->can_configure()) return;
         foreach ($this->selected_post_types() as $post_type) {
-            add_meta_box('shortlinker', __('Shortlinker', 'shortlinker'), array($this, 'meta_box'), $post_type, 'side', 'high');
+            if (function_exists('use_block_editor_for_post_type') && use_block_editor_for_post_type($post_type)) continue;
+            add_meta_box('shortlinker', __('Shortlinker', 'shortlinker'), array($this, 'meta_box'), $post_type, 'side', 'high', array('__block_editor_compatible_meta_box' => true));
         }
     }
 

@@ -3,7 +3,7 @@
  * Plugin Name: Shortlinker
  * Plugin URI: https://shurl.be/
  * Description: Generate and monitor shurl.be shortlinks directly from WordPress.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Author: Jessy System
@@ -16,9 +16,9 @@
 defined('ABSPATH') || exit;
 
 final class Shortlinker_WordPress {
-    const VERSION = '1.0.0';
+    const VERSION = '1.1.0';
     const OPTION = 'shortlinker_settings';
-    const CAPABILITY = 'manage_shortlinker';
+    const UPDATE_MANIFEST = 'https://shurl.be/assets/wordpress-plugin.json';
     const META_ID = '_shortlinker_id';
     const META_URL = '_shortlinker_url';
     const META_CLICKS = '_shortlinker_clicks';
@@ -36,6 +36,9 @@ final class Shortlinker_WordPress {
         add_action('admin_enqueue_scripts', array($plugin, 'enqueue_assets'));
         add_action('wp_ajax_shortlinker_generate', array($plugin, 'ajax_generate'));
         add_action('admin_post_shortlinker_bulk_generate', array($plugin, 'bulk_generate'));
+        add_action('admin_post_shortlinker_check_update', array($plugin, 'check_update_now'));
+        add_filter('site_transient_update_plugins', array($plugin, 'plugin_updates'));
+        add_filter('plugins_api', array($plugin, 'plugin_information'), 20, 3);
     }
 
     public function register_list_columns() {
@@ -46,9 +49,6 @@ final class Shortlinker_WordPress {
     }
 
     public function activate() {
-        foreach (get_users(array('role__in' => array('administrator'))) as $user) {
-            $user->add_cap(self::CAPABILITY);
-        }
         if (!get_option(self::OPTION)) {
             add_option(self::OPTION, array(
                 'api_base' => 'https://shurl.be/api/v1',
@@ -57,7 +57,8 @@ final class Shortlinker_WordPress {
                 'post_types' => array('post', 'page'),
                 'redirect_type' => 302,
                 'tags' => 'wordpress',
-                'allowed_users' => array(),
+                'config_users' => array(), 'config_roles' => array(),
+                'stats_users' => array(), 'stats_roles' => array(),
             ), '', false);
         }
     }
@@ -71,11 +72,27 @@ final class Shortlinker_WordPress {
             'api_base' => 'https://shurl.be/api/v1', 'token' => '', 'domain' => 'shurl.be',
             'post_types' => array('post', 'page'), 'redirect_type' => 302,
             'tags' => 'wordpress', 'allowed_users' => array(),
+            'config_users' => array(), 'config_roles' => array(),
+            'stats_users' => array(), 'stats_roles' => array(),
         ));
     }
 
-    private function can_use() {
-        return current_user_can('manage_options') || current_user_can(self::CAPABILITY);
+    private function has_delegated_access($area) {
+        if (current_user_can('manage_options')) return true;
+        $settings = $this->settings();
+        $user = wp_get_current_user();
+        $legacy = array_map('intval', (array) $settings['allowed_users']);
+        $users = array_map('intval', (array) $settings[$area . '_users']);
+        $roles = array_map('sanitize_key', (array) $settings[$area . '_roles']);
+        return in_array((int) $user->ID, array_unique(array_merge($legacy, $users)), true) || (bool) array_intersect((array) $user->roles, $roles);
+    }
+
+    private function can_configure() {
+        return $this->has_delegated_access('config');
+    }
+
+    private function can_view_stats() {
+        return $this->has_delegated_access('stats');
     }
 
     private function selected_post_types() {
@@ -88,23 +105,18 @@ final class Shortlinker_WordPress {
     }
 
     public function admin_menu() {
-        if (!$this->can_use()) return;
-        if (current_user_can('manage_options') && !current_user_can(self::CAPABILITY)) {
-            wp_get_current_user()->add_cap(self::CAPABILITY);
+        if ($this->can_configure()) {
+            add_options_page(__('Shortlinker', 'shortlinker'), __('Shortlinker', 'shortlinker'), 'read', 'shortlinker', array($this, 'settings_page'));
         }
-        add_options_page(
-            __('Shortlinker', 'shortlinker'),
-            __('Shortlinker', 'shortlinker'),
-            self::CAPABILITY,
-            'shortlinker',
-            array($this, 'settings_page')
-        );
+        if ($this->can_view_stats()) {
+            add_menu_page(__('Shortlinker statistics', 'shortlinker'), __('Shortlinker Stats', 'shortlinker'), 'read', 'shortlinker-stats', array($this, 'statistics_page'), 'dashicons-chart-area', 58);
+        }
     }
 
     public function enqueue_assets($hook) {
         $screen = get_current_screen();
         $selected = $this->selected_post_types();
-        if ($hook !== 'settings_page_shortlinker' && (!$screen || !in_array($screen->post_type, $selected, true))) return;
+        if (!in_array($hook, array('settings_page_shortlinker', 'toplevel_page_shortlinker-stats'), true) && (!$screen || !in_array($screen->post_type, $selected, true))) return;
         wp_enqueue_style('shortlinker-admin', plugins_url('assets/admin.css', __FILE__), array(), self::VERSION);
         wp_enqueue_script('shortlinker-admin', plugins_url('assets/admin.js', __FILE__), array(), self::VERSION, true);
         wp_localize_script('shortlinker-admin', 'ShortlinkerAdmin', array(
@@ -118,21 +130,21 @@ final class Shortlinker_WordPress {
 
     public function handle_settings() {
         if (empty($_POST['shortlinker_action'])) return;
-        if (!$this->can_use()) wp_die(esc_html__('Permission denied.', 'shortlinker'), 403);
+        if (!$this->can_configure()) wp_die(esc_html__('Permission denied.', 'shortlinker'), '', array('response' => 403));
         check_admin_referer('shortlinker_settings');
         $action = sanitize_key(wp_unslash($_POST['shortlinker_action']));
-        if ($action !== 'content' && !current_user_can('manage_options')) wp_die(esc_html__('Administrators only.', 'shortlinker'), 403);
+        if ($action === 'access' && !current_user_can('manage_options')) wp_die(esc_html__('Administrators only.', 'shortlinker'), '', array('response' => 403));
         $settings = $this->settings();
 
         if ($action === 'connection') {
             $raw = trim(wp_unslash(isset($_POST['connection_json']) ? $_POST['connection_json'] : ''));
             $config = json_decode($raw, true);
             if (!is_array($config) || empty($config['apiBase']) || empty($config['token']) || empty($config['domain'])) {
-                $this->redirect_notice('error', __('Invalid connection block. Copy it again from Shortlinker > API clients.', 'shortlinker'));
+                $this->redirect_notice('error', __('Invalid connection block. Copy it again from Shortlinker > API clients.', 'shortlinker'), 'connection');
             }
             $api_base = untrailingslashit(esc_url_raw($config['apiBase']));
             if (strpos($api_base, 'https://') !== 0 || strpos($api_base, '/api/v1') === false) {
-                $this->redirect_notice('error', __('The API URL must use HTTPS and target /api/v1.', 'shortlinker'));
+                $this->redirect_notice('error', __('The API URL must use HTTPS and target /api/v1.', 'shortlinker'), 'connection');
             }
             $settings['api_base'] = $api_base;
             $settings['token'] = sanitize_text_field($config['token']);
@@ -147,23 +159,21 @@ final class Shortlinker_WordPress {
             $settings['redirect_type'] = in_array($redirect, array(301, 302, 307, 308), true) ? $redirect : 302;
             $settings['tags'] = implode(',', array_slice(array_filter(array_map('sanitize_text_field', explode(',', wp_unslash($_POST['tags'] ?? '')))), 0, 20));
         } elseif ($action === 'access') {
-            $old_ids = array_map('intval', (array) $settings['allowed_users']);
-            $new_ids = array_values(array_unique(array_map('intval', isset($_POST['allowed_users']) ? (array) $_POST['allowed_users'] : array())));
-            foreach (array_unique(array_merge($old_ids, $new_ids)) as $user_id) {
-                $user = get_user_by('id', $user_id);
-                if (!$user || user_can($user, 'manage_options')) continue;
-                if (in_array($user_id, $new_ids, true)) $user->add_cap(self::CAPABILITY);
-                else $user->remove_cap(self::CAPABILITY);
+            $valid_roles = array_keys(wp_roles()->roles);
+            foreach (array('config', 'stats') as $area) {
+                $settings[$area . '_users'] = array_values(array_unique(array_map('intval', isset($_POST[$area . '_users']) ? (array) $_POST[$area . '_users'] : array())));
+                $requested_roles = array_map('sanitize_key', isset($_POST[$area . '_roles']) ? (array) $_POST[$area . '_roles'] : array());
+                $settings[$area . '_roles'] = array_values(array_intersect($valid_roles, $requested_roles));
             }
-            $settings['allowed_users'] = $new_ids;
+            $settings['allowed_users'] = array();
         }
 
         update_option(self::OPTION, $settings, false);
-        $this->redirect_notice('updated', __('Settings saved.', 'shortlinker'));
+        $this->redirect_notice('updated', __('Settings saved.', 'shortlinker'), $action === 'content' ? 'content' : ($action === 'access' ? 'access' : 'connection'));
     }
 
-    private function redirect_notice($type, $message) {
-        wp_safe_redirect(add_query_arg(array('page' => 'shortlinker', 'sl_notice' => $type, 'sl_message' => $message), admin_url('options-general.php')));
+    private function redirect_notice($type, $message, $tab = 'connection') {
+        wp_safe_redirect(add_query_arg(array('page' => 'shortlinker', 'tab' => $tab, 'sl_notice' => $type, 'sl_message' => $message), admin_url('options-general.php')));
         exit;
     }
 
@@ -194,7 +204,7 @@ final class Shortlinker_WordPress {
         $post = get_post($post_id);
         if (!$post || !in_array($post->post_type, $this->selected_post_types(), true)) return new WP_Error('post_type', __('This content type is not enabled.', 'shortlinker'));
         if ($post->post_status !== 'publish') return new WP_Error('not_published', __('Publish the content before generating its shortlink.', 'shortlinker'));
-        if (!current_user_can('edit_post', $post_id) || !$this->can_use()) return new WP_Error('forbidden', __('Permission denied.', 'shortlinker'));
+        if (!current_user_can('edit_post', $post_id) || !$this->can_configure()) return new WP_Error('forbidden', __('Permission denied.', 'shortlinker'));
         $existing = get_post_meta($post_id, self::META_ID, true);
         if ($existing && !$replace) return array('id' => $existing, 'shortUrl' => get_post_meta($post_id, self::META_URL, true));
         if ($existing && $replace) {
@@ -223,7 +233,7 @@ final class Shortlinker_WordPress {
     }
 
     public function add_meta_boxes() {
-        if (!$this->can_use()) return;
+        if (!$this->can_configure()) return;
         foreach ($this->selected_post_types() as $post_type) {
             add_meta_box('shortlinker', __('Shortlinker', 'shortlinker'), array($this, 'meta_box'), $post_type, 'side', 'high');
         }
@@ -253,7 +263,7 @@ final class Shortlinker_WordPress {
     }
 
     public function add_column($columns) {
-        if (!$this->can_use()) return $columns;
+        if (!$this->can_configure()) return $columns;
         $columns['shortlinker'] = __('Shortlink', 'shortlinker');
         return $columns;
     }
@@ -282,40 +292,57 @@ final class Shortlinker_WordPress {
     }
 
     public function bulk_generate() {
-        if (!current_user_can('manage_options')) wp_die(esc_html__('Administrators only.', 'shortlinker'), 403);
+        if (!current_user_can('manage_options')) wp_die(esc_html__('Administrators only.', 'shortlinker'), '', array('response' => 403));
         check_admin_referer('shortlinker_bulk_generate');
         $post_type = sanitize_key(wp_unslash($_POST['post_type'] ?? 'post'));
-        if (!in_array($post_type, $this->selected_post_types(), true)) $this->redirect_notice('error', __('Invalid content type.', 'shortlinker'));
-        $query = new WP_Query(array(
-            'post_type' => $post_type, 'post_status' => 'publish', 'posts_per_page' => 50, 'fields' => 'ids',
-            'meta_query' => array(array('key' => self::META_ID, 'compare' => 'NOT EXISTS')),
-            'orderby' => 'ID', 'order' => 'ASC', 'no_found_rows' => true,
-        ));
-        $created = 0; $failed = 0;
-        foreach ($query->posts as $post_id) {
-            $result = $this->generate_for_post($post_id, false);
-            is_wp_error($result) ? $failed++ : $created++;
-        }
-        $this->redirect_notice($failed ? 'error' : 'updated', sprintf(__('Batch complete: %1$d created, %2$d failed. Run it again for the next 50.', 'shortlinker'), $created, $failed));
+        if (!in_array($post_type, $this->selected_post_types(), true)) $this->redirect_notice('error', __('Invalid content type.', 'shortlinker'), 'danger');
+        $loop = !empty($_POST['loop']);
+        $maximum_batches = $loop ? 20 : 1;
+        $created = 0; $failed = 0; $processed = array(); $batches = 0;
+        do {
+            $query = new WP_Query(array(
+                'post_type' => $post_type, 'post_status' => 'publish', 'posts_per_page' => 50, 'fields' => 'ids',
+                'post__not_in' => $processed,
+                'meta_query' => array(array('key' => self::META_ID, 'compare' => 'NOT EXISTS')),
+                'orderby' => 'ID', 'order' => 'ASC', 'no_found_rows' => true,
+            ));
+            if (!$query->posts) break;
+            foreach ($query->posts as $post_id) {
+                $processed[] = (int) $post_id;
+                $result = $this->generate_for_post($post_id, false);
+                is_wp_error($result) ? $failed++ : $created++;
+            }
+            $batches++;
+        } while ($loop && count($query->posts) === 50 && $batches < $maximum_batches);
+        $suffix = $loop && $batches >= $maximum_batches ? __(' Safety limit reached; run again to continue.', 'shortlinker') : '';
+        $this->redirect_notice($failed ? 'error' : 'updated', sprintf(__('Batch complete: %1$d created, %2$d failed.', 'shortlinker'), $created, $failed) . $suffix, 'danger');
     }
 
     public function settings_page() {
-        if (!$this->can_use()) wp_die(esc_html__('Permission denied.', 'shortlinker'), 403);
+        if (!$this->can_configure()) wp_die(esc_html__('Permission denied.', 'shortlinker'), '', array('response' => 403));
         $tab = sanitize_key($_GET['tab'] ?? 'connection');
-        if (!current_user_can('manage_options') && in_array($tab, array('connection', 'access'), true)) $tab = 'statistics';
+        if (!current_user_can('manage_options') && in_array($tab, array('access', 'danger'), true)) $tab = 'connection';
         $settings = $this->settings();
         echo '<div class="wrap shortlinker-admin"><div class="shortlinker-hero"><div><span>SHURL.BE / WORDPRESS</span><h1>' . esc_html__('Shortlinker', 'shortlinker') . '</h1><p>' . esc_html__('Create, distribute and understand every shortlink without leaving WordPress.', 'shortlinker') . '</p></div><div class="shortlinker-bolt">↗</div></div>';
         $this->notice();
-        $tabs = array('connection' => __('Connection', 'shortlinker'), 'content' => __('Content & defaults', 'shortlinker'), 'statistics' => __('Statistics', 'shortlinker'));
-        if (current_user_can('manage_options')) $tabs['access'] = __('Access', 'shortlinker');
+        $tabs = array('connection' => __('Connection', 'shortlinker'), 'content' => __('Content & defaults', 'shortlinker'));
+        if (current_user_can('manage_options')) { $tabs['access'] = __('Access', 'shortlinker'); $tabs['danger'] = __('Danger zone', 'shortlinker'); }
         echo '<nav class="nav-tab-wrapper">';
         foreach ($tabs as $key => $label) echo '<a class="nav-tab ' . ($tab === $key ? 'nav-tab-active' : '') . '" href="' . esc_url(add_query_arg(array('page' => 'shortlinker', 'tab' => $key), admin_url('options-general.php'))) . '">' . esc_html($label) . '</a>';
         echo '</nav><div class="shortlinker-panel">';
         if ($tab === 'connection') $this->connection_tab($settings);
         elseif ($tab === 'content') $this->content_tab($settings);
         elseif ($tab === 'access') $this->access_tab($settings);
-        else $this->statistics_tab();
+        elseif ($tab === 'danger') $this->danger_tab();
         echo '</div></div>';
+    }
+
+    public function statistics_page() {
+        if (!$this->can_view_stats()) wp_die(esc_html__('Permission denied.', 'shortlinker'), '', array('response' => 403));
+        echo '<div class="wrap shortlinker-admin shortlinker-stats-page"><div class="shortlinker-hero"><div><span>SHURL.BE / ANALYTICS</span><h1>' . esc_html__('Shortlinker Stats', 'shortlinker') . '</h1><p>' . esc_html__('Full-width performance intelligence for connected WordPress content.', 'shortlinker') . '</p></div><div class="shortlinker-bolt">↗</div></div>';
+        $this->notice();
+        $this->statistics_tab();
+        echo '</div>';
     }
 
     private function notice() {
@@ -326,6 +353,7 @@ final class Shortlinker_WordPress {
 
     private function connection_tab($settings) {
         $status = $this->api('GET', 'domains');
+        $update = $this->update_manifest();
         echo '<h2>' . esc_html__('API connection', 'shortlinker') . '</h2><p>' . esc_html__('Create a dedicated client in shurl.be > API clients, copy its WordPress connection block and paste it below.', 'shortlinker') . '</p>';
         if (!empty($settings['token']) && !is_wp_error($status)) echo '<div class="shortlinker-status is-up">● ' . esc_html(sprintf(__('Connected to %s', 'shortlinker'), $settings['domain'])) . '</div>';
         elseif (!empty($settings['token'])) echo '<div class="shortlinker-status is-down">● ' . esc_html($status->get_error_message()) . '</div>';
@@ -334,6 +362,14 @@ final class Shortlinker_WordPress {
         echo '<input type="hidden" name="shortlinker_action" value="connection"><label for="connection_json"><strong>' . esc_html__('Connection block', 'shortlinker') . '</strong></label><textarea class="large-text code" rows="9" id="connection_json" name="connection_json" placeholder=\'{"version":1,"apiBase":"https://shurl.be/api/v1","token":"…","domain":"shurl.be"}\'></textarea>';
         submit_button(__('Save and test connection', 'shortlinker'));
         echo '</form>';
+        echo '<hr><h2>' . esc_html__('Plugin updates', 'shortlinker') . '</h2><p><strong>' . esc_html(sprintf(__('Installed: %s', 'shortlinker'), self::VERSION)) . '</strong>';
+        if (!is_wp_error($update) && !empty($update['version'])) echo ' · ' . esc_html(sprintf(__('Latest: %s', 'shortlinker'), $update['version']));
+        echo '</p>';
+        if (!is_wp_error($update) && version_compare(self::VERSION, $update['version'], '<')) echo '<div class="shortlinker-status is-down">' . esc_html__('An update is available from the WordPress Plugins page.', 'shortlinker') . '</div>';
+        elseif (!is_wp_error($update)) echo '<div class="shortlinker-status is-up">' . esc_html__('The plugin is up to date.', 'shortlinker') . '</div>';
+        else echo '<div class="shortlinker-status is-down">' . esc_html($update->get_error_message()) . '</div>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">'; wp_nonce_field('shortlinker_check_update');
+        echo '<input type="hidden" name="action" value="shortlinker_check_update"><button class="button">' . esc_html__('Check for updates now', 'shortlinker') . '</button></form>';
     }
 
     private function content_tab($settings) {
@@ -347,22 +383,34 @@ final class Shortlinker_WordPress {
         foreach (array(302, 307, 301, 308) as $code) echo '<option value="' . esc_attr($code) . '" ' . selected((int) $settings['redirect_type'], $code, false) . '>' . esc_html($code) . '</option>';
         echo '</select><p class="description">302 is recommended for editable content.</p></td></tr><tr><th><label for="tags">' . esc_html__('Default tags', 'shortlinker') . '</label></th><td><input class="regular-text" id="tags" name="tags" value="' . esc_attr($settings['tags']) . '"><p class="description">' . esc_html__('Comma-separated; a wp:post-type tag is added automatically.', 'shortlinker') . '</p></td></tr></table>';
         submit_button(__('Save defaults', 'shortlinker')); echo '</form>';
-        if (current_user_can('manage_options')) {
-            echo '<div class="shortlinker-danger"><h2>' . esc_html__('Danger zone: bulk generation', 'shortlinker') . '</h2><p>' . esc_html__('Creates up to 50 missing shortlinks per run. This consumes API quota and cannot be undone as a batch.', 'shortlinker') . '</p><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" data-shortlinker-confirm="' . esc_attr__('Generate links for the next 50 published items?', 'shortlinker') . '">';
-            wp_nonce_field('shortlinker_bulk_generate'); echo '<input type="hidden" name="action" value="shortlinker_bulk_generate"><select name="post_type">';
-            foreach ($this->selected_post_types() as $type) { $object = get_post_type_object($type); echo '<option value="' . esc_attr($type) . '">' . esc_html($object->labels->name) . '</option>'; }
-            echo '</select> <button class="button button-danger">' . esc_html__('Generate missing shortlinks', 'shortlinker') . '</button></form></div>';
-        }
+    }
+
+    private function danger_tab() {
+        if (!current_user_can('manage_options')) return;
+        echo '<div class="shortlinker-danger"><h2>' . esc_html__('Bulk generation', 'shortlinker') . '</h2><p>' . esc_html__('Creates missing shortlinks in batches of 50. Loop mode continues automatically for up to 1,000 items per run. This consumes API quota and cannot be undone as a batch.', 'shortlinker') . '</p><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" data-shortlinker-confirm="' . esc_attr__('Generate missing shortlinks for the selected content type?', 'shortlinker') . '">';
+        wp_nonce_field('shortlinker_bulk_generate'); echo '<input type="hidden" name="action" value="shortlinker_bulk_generate"><label><strong>' . esc_html__('Content type', 'shortlinker') . '</strong> <select name="post_type">';
+        foreach ($this->selected_post_types() as $type) { $object = get_post_type_object($type); echo '<option value="' . esc_attr($type) . '">' . esc_html($object->labels->name) . '</option>'; }
+        echo '</select></label><label class="shortlinker-check"><input type="checkbox" name="loop" value="1"> <span><strong>' . esc_html__('Loop automatically', 'shortlinker') . '</strong><small>' . esc_html__('Continue batch by batch, up to the 1,000-item safety limit.', 'shortlinker') . '</small></span></label><button class="button button-danger">' . esc_html__('Generate missing shortlinks', 'shortlinker') . '</button></form></div>';
     }
 
     private function access_tab($settings) {
         if (!current_user_can('manage_options')) return;
         $users = get_users(array('orderby' => 'display_name', 'exclude' => array(get_current_user_id())));
-        echo '<h2>' . esc_html__('Delegated access', 'shortlinker') . '</h2><p>' . esc_html__('Only administrators can change connection, access and bulk-generation settings. Selected users can use the editor tools, lists and statistics.', 'shortlinker') . '</p><form method="post">'; wp_nonce_field('shortlinker_settings');
-        echo '<input type="hidden" name="shortlinker_action" value="access"><div class="shortlinker-user-grid">';
-        foreach ($users as $user) {
-            if (user_can($user, 'manage_options')) continue;
-            echo '<label class="shortlinker-check"><input type="checkbox" name="allowed_users[]" value="' . esc_attr($user->ID) . '" ' . checked(in_array((int) $user->ID, array_map('intval', (array) $settings['allowed_users']), true), true, false) . '> <span><strong>' . esc_html($user->display_name) . '</strong><small>' . esc_html($user->user_email) . '</small></span></label>';
+        $roles = wp_roles()->roles;
+        echo '<h2>' . esc_html__('Delegated access', 'shortlinker') . '</h2><p>' . esc_html__('Grant configuration/editor access and statistics access independently, by WordPress role or individual user. Administrators always retain both.', 'shortlinker') . '</p><form method="post">'; wp_nonce_field('shortlinker_settings');
+        echo '<input type="hidden" name="shortlinker_action" value="access"><div class="shortlinker-access-grid">';
+        foreach (array('config' => __('Configuration and editor', 'shortlinker'), 'stats' => __('Statistics page', 'shortlinker')) as $area => $title) {
+            echo '<section><h3>' . esc_html($title) . '</h3><h4>' . esc_html__('Roles', 'shortlinker') . '</h4>';
+            foreach ($roles as $role_key => $role) {
+                if ($role_key === 'administrator') continue;
+                echo '<label class="shortlinker-check"><input type="checkbox" name="' . esc_attr($area) . '_roles[]" value="' . esc_attr($role_key) . '" ' . checked(in_array($role_key, (array) $settings[$area . '_roles'], true), true, false) . '> <span><strong>' . esc_html(translate_user_role($role['name'])) . '</strong><small>' . esc_html($role_key) . '</small></span></label>';
+            }
+            echo '<h4>' . esc_html__('Individual users', 'shortlinker') . '</h4>';
+            foreach ($users as $user) {
+                if (user_can($user, 'manage_options')) continue;
+                echo '<label class="shortlinker-check"><input type="checkbox" name="' . esc_attr($area) . '_users[]" value="' . esc_attr($user->ID) . '" ' . checked(in_array((int) $user->ID, array_map('intval', (array) $settings[$area . '_users']), true), true, false) . '> <span><strong>' . esc_html($user->display_name) . '</strong><small>' . esc_html($user->user_email) . '</small></span></label>';
+            }
+            echo '</section>';
         }
         echo '</div>'; submit_button(__('Save access', 'shortlinker')); echo '</form>';
     }
@@ -388,22 +436,74 @@ final class Shortlinker_WordPress {
         echo '<section class="shortlinker-timeline"><div><h2>' . esc_html__('Last 30 days', 'shortlinker') . '</h2><p>' . esc_html__('Daily clicks aggregated across connected content.', 'shortlinker') . '</p></div><div class="shortlinker-chart" aria-label="' . esc_attr__('Daily click chart', 'shortlinker') . '">';
         foreach ($timeline as $day => $clicks) echo '<span style="height:' . esc_attr(max(5, round(($clicks / $maximum) * 100))) . '%" title="' . esc_attr($day . ': ' . $clicks) . '"></span>';
         if (!$timeline) echo '<em>' . esc_html__('No temporal data yet.', 'shortlinker') . '</em>';
-        echo '</div></section><div class="shortlinker-stats-grid"><div><h2>' . esc_html__('Shortlink performance', 'shortlinker') . '</h2><div class="shortlinker-table-wrap"><table class="widefat striped"><thead><tr><th>' . esc_html__('Content', 'shortlinker') . '</th><th>' . esc_html__('Shortlink', 'shortlinker') . '</th><th>' . esc_html__('Clicks', 'shortlinker') . '</th><th>' . esc_html__('Unique', 'shortlinker') . '</th><th>' . esc_html__('Human / robot', 'shortlinker') . '</th></tr></thead><tbody>';
+        echo '</div></section><section class="shortlinker-performance"><h2>' . esc_html__('Shortlink performance', 'shortlinker') . '</h2><div class="shortlinker-table-wrap"><table class="widefat striped"><thead><tr><th>' . esc_html__('Content', 'shortlinker') . '</th><th>' . esc_html__('Shortlink', 'shortlinker') . '</th><th>' . esc_html__('Clicks', 'shortlinker') . '</th><th>' . esc_html__('Unique', 'shortlinker') . '</th><th>' . esc_html__('Human / robot', 'shortlinker') . '</th></tr></thead><tbody>';
         foreach ($rows as $row) echo '<tr><td><a href="' . esc_url(get_edit_post_link($row[0]->ID)) . '">' . esc_html(get_the_title($row[0])) . '</a><br><small>' . esc_html($row[0]->post_type) . '</small></td><td><a href="' . esc_url($row[1]) . '" target="_blank" rel="noopener"><code>' . esc_html($row[1]) . '</code></a></td><td><strong>' . esc_html(number_format_i18n($row[2])) . '</strong></td><td>' . esc_html(number_format_i18n($row[3])) . '</td><td>' . esc_html(number_format_i18n($row[4])) . ' / ' . esc_html(number_format_i18n($row[5])) . '</td></tr>';
         if (!$rows) echo '<tr><td colspan="5">' . esc_html__('No shortlinks have been generated yet.', 'shortlinker') . '</td></tr>';
-        echo '</tbody></table></div></div><aside>';
+        echo '</tbody></table></div></section><div class="shortlinker-breakdowns">';
         $this->ranked_list(__('Top countries', 'shortlinker'), $countries, __('No geographic data yet.', 'shortlinker'));
         $this->ranked_list(__('Browsers', 'shortlinker'), $browsers, __('No browser data yet.', 'shortlinker'));
         $this->ranked_list(__('Devices', 'shortlinker'), $devices, __('No device data yet.', 'shortlinker'));
         $this->ranked_list(__('Referrers', 'shortlinker'), $referrers, __('No referrer data yet.', 'shortlinker'));
-        echo '</aside></div>';
+        echo '</div>';
     }
 
     private function ranked_list($title, $values, $empty) {
-        echo '<h2>' . esc_html($title) . '</h2><ol class="shortlinker-countries">';
+        echo '<section><h2>' . esc_html($title) . '</h2><ol class="shortlinker-countries">';
         foreach (array_slice($values, 0, 10, true) as $name => $clicks) echo '<li><span title="' . esc_attr($name) . '">' . esc_html($name) . '</span><strong>' . esc_html(number_format_i18n($clicks)) . '</strong></li>';
         if (!$values) echo '<li>' . esc_html($empty) . '</li>';
-        echo '</ol>';
+        echo '</ol></section>';
+    }
+
+    private function update_manifest($force = false) {
+        $cache_key = 'shortlinker_wordpress_update_manifest';
+        if (!$force) {
+            $cached = get_site_transient($cache_key);
+            if (is_array($cached)) return $cached;
+        }
+        $response = wp_remote_get(self::UPDATE_MANIFEST, array('timeout' => 10, 'headers' => array('Accept' => 'application/json')));
+        if (is_wp_error($response)) return $response;
+        if (wp_remote_retrieve_response_code($response) !== 200) return new WP_Error('update_http', __('Unable to retrieve Shortlinker update information.', 'shortlinker'));
+        $manifest = json_decode(wp_remote_retrieve_body($response), true);
+        if (!is_array($manifest) || empty($manifest['version']) || empty($manifest['download_url'])) return new WP_Error('update_manifest', __('Invalid Shortlinker update information.', 'shortlinker'));
+        set_site_transient($cache_key, $manifest, 12 * HOUR_IN_SECONDS);
+        return $manifest;
+    }
+
+    public function plugin_updates($transient) {
+        if (!is_object($transient) || empty($transient->checked)) return $transient;
+        $manifest = $this->update_manifest();
+        if (is_wp_error($manifest) || version_compare(self::VERSION, $manifest['version'], '>=')) return $transient;
+        $plugin = plugin_basename(__FILE__);
+        $transient->response[$plugin] = (object) array(
+            'slug' => 'shortlinker', 'plugin' => $plugin, 'new_version' => $manifest['version'],
+            'url' => $manifest['homepage'], 'package' => $manifest['download_url'],
+            'tested' => $manifest['tested'] ?? '', 'requires_php' => $manifest['requires_php'] ?? '7.4',
+        );
+        return $transient;
+    }
+
+    public function plugin_information($result, $action, $args) {
+        if ($action !== 'plugin_information' || empty($args->slug) || $args->slug !== 'shortlinker') return $result;
+        $manifest = $this->update_manifest();
+        if (is_wp_error($manifest)) return $result;
+        return (object) array(
+            'name' => 'Shortlinker', 'slug' => 'shortlinker', 'version' => $manifest['version'],
+            'author' => '<a href="https://jessysystem.com/">Jessy System</a>',
+            'homepage' => $manifest['homepage'], 'download_link' => $manifest['download_url'],
+            'requires' => $manifest['requires'] ?? '6.5', 'requires_php' => $manifest['requires_php'] ?? '7.4',
+            'tested' => $manifest['tested'] ?? '',
+            'sections' => array('description' => $manifest['description'] ?? '', 'changelog' => $manifest['changelog'] ?? ''),
+        );
+    }
+
+    public function check_update_now() {
+        if (!$this->can_configure()) wp_die(esc_html__('Permission denied.', 'shortlinker'), '', array('response' => 403));
+        check_admin_referer('shortlinker_check_update');
+        delete_site_transient('shortlinker_wordpress_update_manifest');
+        delete_site_transient('update_plugins');
+        $manifest = $this->update_manifest(true);
+        $message = is_wp_error($manifest) ? $manifest->get_error_message() : (version_compare(self::VERSION, $manifest['version'], '<') ? sprintf(__('Version %s is available.', 'shortlinker'), $manifest['version']) : __('The plugin is up to date.', 'shortlinker'));
+        $this->redirect_notice(is_wp_error($manifest) ? 'error' : 'updated', $message, 'connection');
     }
 }
 

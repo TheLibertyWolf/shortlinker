@@ -4,7 +4,7 @@ Tags: shortlink, analytics, url shortener, shurl, api
 Requires at least: 6.5
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -31,6 +31,13 @@ Every state-changing action uses WordPress capabilities and nonces. Protect Word
 and database access because the API token is stored in the WordPress options table.
 
 == Changelog ==
+
+= 1.1.0 =
+* Added a full-width top-level statistics page.
+* Added separate role and user access rules for configuration and statistics.
+* Added a dedicated danger tab with optional looped generation.
+* Added secure update checks against the shurl.be plugin manifest.
+* Preserved the active settings tab after saving.
 
 = 1.0.0 =
 * Initial production release.

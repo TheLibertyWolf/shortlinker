@@ -1,9 +1,9 @@
 "use strict";
 
-const CACHE = "shortlinker-admin-v1";
+const CACHE = "shortlinker-admin-v2";
 const STATIC_ASSETS = [
-  "/assets/app.css?v=20261004-4",
-  "/assets/app.js?v=20261004-4",
+  "/assets/app.css?v=20261004-5",
+  "/assets/app.js?v=20261004-5",
   "/assets/favicon.svg",
   "/assets/icons/icon-192.png",
   "/assets/icons/icon-512.png",

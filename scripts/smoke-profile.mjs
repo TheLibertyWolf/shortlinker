@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { closeConnections, db } from "../dist/db.js";
-import { hashPassword, sha256 } from "../dist/crypto.js";
+import { encrypt, hashPassword, sha256 } from "../dist/crypto.js";
 
 const baseUrl = process.env.SMOKE_BASE_URL ?? "http://127.0.0.1:3000";
 const hostname = process.env.SMOKE_HOSTNAME ?? "shurl.be";
@@ -12,6 +12,7 @@ const userCsrf = randomBytes(24).toString("base64url");
 const adminCsrf = randomBytes(24).toString("base64url");
 let userId;
 let adminId;
+let apiClientId;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -43,6 +44,14 @@ try {
   const admin = await db.query("SELECT id FROM users WHERE username='arnaud'");
   assert(admin.rowCount === 1, "administrator account is unavailable");
   adminId = admin.rows[0].id;
+  const apiSecret = `smoke-wordpress-${suffix}`;
+  const primaryDomain = await db.query("SELECT id FROM domains WHERE is_primary=true LIMIT 1");
+  const apiClient = await db.query(
+    `INSERT INTO api_clients(name,token_prefix,token_hash,token_ciphertext,scopes,allowed_cidrs,domain_ids,created_by)
+     VALUES($1,$2,$3,$4,$5,$6::cidr[],$7::uuid[],$8) RETURNING id`,
+    [`WordPress Smoke ${suffix}`, `wpsmoke${suffix.slice(0,4)}`, sha256(apiSecret), encrypt(apiSecret), ["links:read"], ["127.0.0.1/32"], [primaryDomain.rows[0].id], adminId]
+  );
+  apiClientId = apiClient.rows[0].id;
 
   await db.query(
     `INSERT INTO sessions(token_hash,user_id,csrf_token,mfa_verified,ip_hash,user_agent,expires_at)
@@ -95,7 +104,14 @@ try {
   const legacy = await request("/admin/security", adminToken);
   assert(legacy.status === 308 && legacy.headers.get("location") === "/admin/profile", "legacy security URL does not redirect to profile");
 
-  console.log(JSON.stringify({ ok: true, profile: 200, locale: "fr", managedEmail: true, retentionMax: 365, legacyRedirect: 308 }));
+  const apiClients = await request("/admin/api-clients", adminToken);
+  const apiClientsHtml = await apiClients.text();
+  assert(apiClients.status === 200 && apiClientsHtml.includes(`/admin/api-clients/${apiClientId}/wordpress`), "WordPress configuration action is unavailable");
+  const wordpressConfig = await request(`/admin/api-clients/${apiClientId}/wordpress`, adminToken);
+  const wordpressHtml = await wordpressConfig.text();
+  assert(wordpressConfig.status === 200 && wordpressHtml.includes(apiSecret) && wordpressHtml.includes('WordPress connection block'), "reusable WordPress configuration is incomplete");
+
+  console.log(JSON.stringify({ ok: true, profile: 200, locale: "fr", managedEmail: true, retentionMax: 365, legacyRedirect: 308, wordpressConfig: true }));
 } finally {
   if (userId) {
     await db.query("DELETE FROM audit_logs WHERE actor_user_id=$1 OR target_id=$1::text", [userId]);
@@ -103,6 +119,10 @@ try {
   }
   if (adminId) {
     await db.query("DELETE FROM sessions WHERE user_id=$1 AND user_agent='Shortlinker admin smoke'", [adminId]);
+  }
+  if (apiClientId) {
+    await db.query("DELETE FROM audit_logs WHERE api_client_id=$1 OR (target_type='api_client' AND target_id=$1::text)", [apiClientId]);
+    await db.query("DELETE FROM api_clients WHERE id=$1", [apiClientId]);
   }
   await closeConnections();
 }

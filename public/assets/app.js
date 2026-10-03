@@ -66,4 +66,18 @@
     installButton.classList.add("d-none");
   });
   window.addEventListener("appinstalled", () => installButton?.classList.add("d-none"));
+
+  document.querySelectorAll("[data-homepage-mode]").forEach((select) => {
+    const form = select.closest("form");
+    const custom = form?.querySelector("[data-homepage-custom]");
+    if (!(custom instanceof HTMLInputElement)) return;
+    const apply = () => {
+      const enabled = select.value === "custom";
+      custom.disabled = !enabled;
+      custom.required = enabled;
+      if (!enabled) custom.value = "";
+    };
+    select.addEventListener("change", apply);
+    apply();
+  });
 })();

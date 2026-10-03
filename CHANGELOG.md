@@ -4,6 +4,24 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-04
+
+### Added
+
+- WordPress plugin 1.1.0 with a top-level full-width analytics page, independent role/user access policies, a dedicated danger tab, looped bulk generation, and native update checks.
+- Reusable encrypted WordPress connection blocks from the API client list.
+- Explicit default-homepage or custom-URL selection when attaching domains.
+
+### Changed
+
+- WordPress settings preserve the active tab after every save.
+- `fran.racing` now redirects its homepage to `https://franceracing.fr`.
+
+### Security
+
+- Reusable API client secrets are encrypted at rest and every WordPress configuration view is audited.
+- Custom domain homepage redirects continue to require HTTPS and reject self-referential loops.
+
 ## [0.2.1] - 2026-10-04
 
 ### Changed

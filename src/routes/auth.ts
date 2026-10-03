@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { authenticator } from "otplib";
+import { verify as verifyTotp } from "otplib";
 import { db, redis } from "../db.js";
 import { audit } from "../audit.js";
 import { createSession, destroySession, isAdminIp, loadSession, turnstilePublicSettings, verifyCsrf, verifyTurnstile } from "../auth.js";
@@ -86,7 +86,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const code = String((request.body as Record<string, string>).code ?? "").replace(/[\s-]/g, "");
     let valid = false;
     if (row?.totp_secret_encrypted && /^\d{6}$/.test(code)) {
-      valid = authenticator.verify({ token: code, secret: decrypt(row.totp_secret_encrypted) });
+      valid = (await verifyTotp({ token: code, secret: decrypt(row.totp_secret_encrypted) })).valid;
     }
     if (row && !valid && /^[A-Z0-9]{12}$/.test(code.toUpperCase())) {
       const codes = await db.query<{ id: string; code_hash: string }>("SELECT id, code_hash FROM recovery_codes WHERE user_id=$1 AND used_at IS NULL", [row.user_id]);

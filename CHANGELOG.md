@@ -4,6 +4,17 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-04
+
+### Changed
+
+- Updated production and development dependency groups after isolated compatibility testing.
+- Migrated TOTP generation and verification to the asynchronous otplib 13 API.
+
+### Security
+
+- Dependency audit now reports zero known vulnerabilities.
+
 ## [0.2.0] - 2026-10-04
 
 ### Added

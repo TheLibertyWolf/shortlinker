@@ -1,0 +1,56 @@
+{
+  "name": "shortlinker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fast, secure, multi-domain URL shortener for shurl.be",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "assets": "node scripts/copy-assets.mjs",
+    "build": "npm run assets && tsc -p tsconfig.json",
+    "dev": "tsx watch src/server.ts",
+    "dev:worker": "tsx watch src/worker.ts",
+    "start": "node dist/server.js",
+    "worker": "node dist/worker.js",
+    "migrate": "node dist/migrate.js",
+    "bootstrap": "node dist/bootstrap.js",
+    "verify-domains": "node dist/verify-domains.js",
+    "smoke": "node scripts/smoke-production.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "postinstall": "npm run assets"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/formbody": "^8.0.2",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/static": "^10.1.5",
+    "@simplewebauthn/server": "^13.2.2",
+    "argon2": "^0.44.0",
+    "bootstrap": "^5.3.8",
+    "bootstrap-icons": "^1.13.1",
+    "fastify": "^5.6.1",
+    "geoip-lite": "^2.0.3",
+    "ioredis": "^5.8.1",
+    "ipaddr.js": "^2.2.0",
+    "isbot": "^5.1.30",
+    "otplib": "^12.0.1",
+    "pg": "^8.16.3",
+    "qrcode": "^1.5.4",
+    "ua-parser-js": "^2.0.6",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/geoip-lite": "^1.4.4",
+    "@types/node": "^24.9.1",
+    "@types/pg": "^8.15.6",
+    "@types/qrcode": "^1.5.5",
+    "@types/ua-parser-js": "^0.7.39",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+coverage/
+*.log
+*.tmp
+.DS_Store
+data/
+secrets/
+public/vendor/
+public/assets/vendor/
+deploy/domain-tokens.env
+deploy/resolv.install.conf
+deploy/production.env
+deploy/initial-admin.txt

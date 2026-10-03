@@ -1,0 +1,33 @@
+[Unit]
+Description=Shortlinker analytics worker
+After=network-online.target postgresql.service redis-server.service
+Requires=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=shortlinker
+Group=shortlinker
+WorkingDirectory=/opt/shortlinker
+EnvironmentFile=/etc/shortlinker/shortlinker.env
+ExecStart=/usr/local/bin/node /opt/shortlinker/dist/worker.js
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

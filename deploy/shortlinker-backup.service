@@ -1,0 +1,15 @@
+[Unit]
+Description=Shortlinker PostgreSQL logical backup
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=postgres
+Group=postgres
+UMask=0077
+ExecStart=/usr/local/sbin/shortlinker-backup
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/backups/shortlinker
+ProtectHome=true

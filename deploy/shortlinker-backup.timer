@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Shortlinker PostgreSQL logical backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 Europe/Paris
+Persistent=true
+RandomizedDelaySec=10m
+Unit=shortlinker-backup.service
+
+[Install]
+WantedBy=timers.target

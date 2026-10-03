@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+backup_dir=/var/backups/shortlinker
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+target="${backup_dir}/shortlinker-${stamp}.dump"
+
+install -d -m 0700 -o postgres -g postgres "$backup_dir"
+pg_dump --format=custom --compress=9 --file="$target" shortlinker
+find "$backup_dir" -maxdepth 1 -type f -name 'shortlinker-*.dump' -mtime +14 -delete
+pg_restore --list "$target" >/dev/null

@@ -1,0 +1,42 @@
+{
+	email abuse@shurl.be
+	on_demand_tls {
+		ask http://127.0.0.1:3000/internal/caddy/ask
+	}
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+(shortlinker) {
+	encode zstd gzip
+
+	@blocked_admin {
+		path /admin* /auth*
+		not remote_ip 82.125.126.40 92.154.113.107 217.109.227.136 31.35.148.167 87.98.183.173
+	}
+	respond @blocked_admin "Administration is not available from this network." 403
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	reverse_proxy 127.0.0.1:3000 {
+		header_up X-Forwarded-Proto https
+	}
+}
+
+http:// {
+	redir https://{host}{uri} 308
+}
+
+https:// {
+	tls {
+		on_demand
+	}
+	import shortlinker
+}

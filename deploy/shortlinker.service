@@ -1,0 +1,35 @@
+[Unit]
+Description=Shortlinker web application
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+Requires=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=shortlinker
+Group=shortlinker
+WorkingDirectory=/opt/shortlinker
+EnvironmentFile=/etc/shortlinker/shortlinker.env
+ExecStartPre=/usr/local/bin/node /opt/shortlinker/dist/migrate.js
+ExecStart=/usr/local/bin/node /opt/shortlinker/dist/server.js
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

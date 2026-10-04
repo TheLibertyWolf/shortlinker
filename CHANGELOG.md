@@ -4,6 +4,13 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-10-04
+
+### Changed
+
+- Retrying an existing custom slug returns the existing link when domain, destination and redirect type match, allowing an integration to recover after a lost or rejected response.
+- A custom slug that points elsewhere still returns an explicit `slug_exists` conflict.
+
 ## [0.3.5] - 2026-10-04
 
 ### Changed

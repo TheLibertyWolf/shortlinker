@@ -175,7 +175,25 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
         break;
       } catch (error) {
         if (String(error).includes("links_domain_id_slug_key") && !input.slug) { slug = generateSlug(); continue; }
-        if (String(error).includes("links_domain_id_slug_key")) return reply.code(409).send({ error: { code: "slug_exists", message: "Slug already exists" } });
+        if (String(error).includes("links_domain_id_slug_key")) {
+          const existing = await db.query(
+            `SELECT id,slug,destination,status,created_at AS "createdAt" FROM links
+             WHERE domain_id=$1 AND slug=$2 AND deleted_at IS NULL AND destination=$3 AND redirect_type=$4`,
+            [domain.rows[0].id, slug, destination, input.redirectType]
+          );
+          if (existing.rows[0]) {
+            const reused = { ...existing.rows[0], domain: domain.rows[0].hostname, shortUrl: `https://${domain.rows[0].hostname}/${slug}` };
+            const reusedResponse = { data: reused };
+            if (idempotencyKey) await db.query(
+              `INSERT INTO api_idempotency(api_client_id,idempotency_key,request_hash,status_code,response)
+               VALUES($1,$2,$3,200,$4::jsonb) ON CONFLICT DO NOTHING`,
+              [client.id, idempotencyKey, requestHash, JSON.stringify(reusedResponse)]
+            );
+            await audit(request, "api.link.reused", { apiClientId: client.id, targetType: "link", targetId: String(reused.id) });
+            return reply.code(200).send(reusedResponse);
+          }
+          return reply.code(409).send({ error: { code: "slug_exists", message: "Slug already exists with a different destination or redirect type" } });
+        }
         throw error;
       }
     }

@@ -39,12 +39,20 @@
     copy.dataset.shortlinkerCopyValue = url;
     copy.textContent = ShortlinkerAdmin.copy;
     const stats = document.createElement("p");
+    const postId = container.closest("[data-shortlinker-post]")?.dataset.shortlinkerPost || "";
+    const clicks = document.createElement("span");
+    clicks.dataset.shortlinkerClicksLink = "";
+    clicks.dataset.postId = postId;
+    const clickCount = document.createElement("strong");
+    clickCount.className = "shortlinker-click-count";
+    clickCount.textContent = "0";
+    clicks.append(clickCount, ` ${ShortlinkerAdmin.clicks} · `);
     const statsLink = document.createElement("a");
     statsLink.href = `${ShortlinkerAdmin.analyticsUrl}/${encodeURIComponent(linkId)}`;
     statsLink.target = "_blank";
     statsLink.rel = "noopener";
     statsLink.textContent = `${ShortlinkerAdmin.viewStats} ↗`;
-    stats.appendChild(statsLink);
+    stats.append(clicks, statsLink);
     row.append(link, copy);
     container.replaceChildren(row, stats);
   };
@@ -97,6 +105,50 @@
         box.querySelector(".shortlinker-message").textContent = error.message;
         button.textContent = original;
       } finally { button.disabled = false; }
+    });
+  });
+
+  const formatNumber = (value) => Number(value || 0).toLocaleString();
+  const clickNodes = [...document.querySelectorAll("[data-shortlinker-clicks-link][data-post-id]")];
+  if (clickNodes.length) {
+    const postIds = [...new Set(clickNodes.map((node) => node.dataset.postId).filter(Boolean))];
+    request("shortlinker_click_counts", {
+      nonce: ShortlinkerAdmin.statsNonce,
+      postIds: JSON.stringify(postIds),
+    }).then((data) => {
+      clickNodes.forEach((node) => {
+        if (!Object.prototype.hasOwnProperty.call(data.clicks || {}, node.dataset.postId)) return;
+        const count = node.querySelector(".shortlinker-click-count");
+        if (count) count.textContent = formatNumber(data.clicks[node.dataset.postId]);
+      });
+    }).catch(() => {
+      // Keep the locally cached value when the API is temporarily unavailable.
+    });
+  }
+
+  document.querySelectorAll("[data-shortlinker-stats-summary]").forEach((summary) => {
+    const status = summary.querySelector("[data-shortlinker-stats-status]");
+    const list = summary.querySelector("[data-shortlinker-top-links]");
+    request("shortlinker_stats_summary", { nonce: ShortlinkerAdmin.statsNonce }).then((data) => {
+      const globalClicks = summary.querySelector("[data-shortlinker-global-clicks]");
+      if (globalClicks) globalClicks.textContent = formatNumber(data.clicks);
+      list.replaceChildren();
+      (data.topLinks || []).forEach((item) => {
+        const row = document.createElement("li");
+        const link = document.createElement("a");
+        link.href = `https://${item.domain}/${item.slug}`;
+        link.target = "_blank";
+        link.rel = "noopener";
+        link.textContent = `${item.domain}/${item.slug}`;
+        const count = document.createElement("strong");
+        count.textContent = `${formatNumber(item.clicks)} ${ShortlinkerAdmin.clicks}`;
+        row.append(link, count);
+        list.appendChild(row);
+      });
+      status.textContent = (data.topLinks || []).length ? "" : ShortlinkerAdmin.noClickData;
+    }).catch((error) => {
+      status.textContent = error.message || ShortlinkerAdmin.statsLoadError;
+      status.classList.add("shortlinker-editor-error");
     });
   });
 

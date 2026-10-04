@@ -4,7 +4,7 @@ Tags: shortlink, analytics, url shortener, shurl, api
 Requires at least: 6.5
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,6 +32,12 @@ Every state-changing action uses WordPress capabilities and nonces. Protect Word
 and database access because the API token is stored in the WordPress options table.
 
 == Changelog ==
+
+= 1.3.1 =
+* Restored the Shortlinker widget in the Classic Editor right sidebar.
+* Restored global clicks and the five best-performing links on the statistics page.
+* Restored click counters in article, page and custom post type lists.
+* Loads counters asynchronously in one grouped request so WordPress screens remain fast.
 
 = 1.3.0 =
 * Added optional automatic shortlink generation when content first transitions to published.

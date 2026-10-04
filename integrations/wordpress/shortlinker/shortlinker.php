@@ -3,7 +3,7 @@
  * Plugin Name: Shortlinker
  * Plugin URI: https://shurl.be/
  * Description: Generate and monitor shurl.be shortlinks directly from WordPress.
- * Version: 1.3.0
+ * Version: 1.3.1
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Author: Jessy System
@@ -16,11 +16,12 @@
 defined('ABSPATH') || exit;
 
 final class Shortlinker_WordPress {
-    const VERSION = '1.3.0';
+    const VERSION = '1.3.1';
     const OPTION = 'shortlinker_settings';
     const UPDATE_MANIFEST = 'https://shurl.be/assets/wordpress-plugin.json';
     const META_ID = '_shortlinker_id';
     const META_URL = '_shortlinker_url';
+    const META_CLICKS = '_shortlinker_clicks';
     const META_AUTO_ERROR = '_shortlinker_auto_error';
     const SUMMARY_CACHE = 'shortlinker_local_summary';
     const WEB_ANALYTICS = 'https://shurl.be/admin/links';
@@ -35,10 +36,12 @@ final class Shortlinker_WordPress {
         add_action('admin_init', array($plugin, 'handle_settings'));
         add_action('init', array($plugin, 'register_list_columns'), 100);
         add_action('transition_post_status', array($plugin, 'auto_generate_on_publish'), 20, 3);
-        add_action('add_meta_boxes', array($plugin, 'add_meta_boxes'));
+        add_action('add_meta_boxes', array($plugin, 'add_meta_boxes'), 10, 2);
         add_action('admin_enqueue_scripts', array($plugin, 'enqueue_assets'));
         add_action('enqueue_block_editor_assets', array($plugin, 'enqueue_block_editor_assets'));
         add_action('wp_ajax_shortlinker_generate', array($plugin, 'ajax_generate'));
+        add_action('wp_ajax_shortlinker_click_counts', array($plugin, 'ajax_click_counts'));
+        add_action('wp_ajax_shortlinker_stats_summary', array($plugin, 'ajax_stats_summary'));
         add_action('wp_ajax_shortlinker_bulk_status', array($plugin, 'ajax_bulk_status'));
         add_action('wp_ajax_shortlinker_bulk_batch', array($plugin, 'ajax_bulk_batch'));
         add_action('admin_post_shortlinker_check_update', array($plugin, 'check_update_now'));
@@ -137,6 +140,7 @@ final class Shortlinker_WordPress {
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('shortlinker_editor'),
             'bulkNonce' => wp_create_nonce('shortlinker_bulk'),
+            'statsNonce' => wp_create_nonce('shortlinker_stats_async'),
             'generating' => __('Generating…', 'shortlinker'),
             'regenerate' => __('Regenerate', 'shortlinker'),
             'confirmRegenerate' => __('The current shortlink will stop working. Regenerate it?', 'shortlinker'),
@@ -158,6 +162,9 @@ final class Shortlinker_WordPress {
             'copied' => __('Copied!', 'shortlinker'),
             'copyError' => __('Could not copy the shortlink.', 'shortlinker'),
             'viewStats' => __('View detailed statistics', 'shortlinker'),
+            'clicks' => __('clicks', 'shortlinker'),
+            'statsLoadError' => __('Unable to load click statistics.', 'shortlinker'),
+            'noClickData' => __('No click data yet.', 'shortlinker'),
             'analyticsUrl' => self::WEB_ANALYTICS,
             'error' => __('The operation failed.', 'shortlinker'),
         ));
@@ -292,6 +299,7 @@ final class Shortlinker_WordPress {
         if (empty($data['id']) || empty($data['shortUrl'])) return new WP_Error('bad_response', __('Incomplete API response.', 'shortlinker'));
         update_post_meta($post_id, self::META_ID, sanitize_text_field($data['id']));
         update_post_meta($post_id, self::META_URL, esc_url_raw($data['shortUrl']));
+        update_post_meta($post_id, self::META_CLICKS, 0);
         delete_transient(self::SUMMARY_CACHE);
         delete_post_meta($post_id, self::META_AUTO_ERROR);
         return $data;
@@ -311,22 +319,22 @@ final class Shortlinker_WordPress {
         }
     }
 
-    public function add_meta_boxes() {
+    public function add_meta_boxes($post_type, $post) {
         if (!$this->can_configure()) return;
-        foreach ($this->selected_post_types() as $post_type) {
-            if (function_exists('use_block_editor_for_post_type') && use_block_editor_for_post_type($post_type)) continue;
-            add_meta_box('shortlinker', __('Shortlinker', 'shortlinker'), array($this, 'meta_box'), $post_type, 'side', 'high', array('__block_editor_compatible_meta_box' => true));
-        }
+        if (!in_array($post_type, $this->selected_post_types(), true)) return;
+        if ($post instanceof WP_Post && function_exists('use_block_editor_for_post') && use_block_editor_for_post($post)) return;
+        add_meta_box('shortlinker', __('Shortlinker', 'shortlinker'), array($this, 'meta_box'), $post_type, 'side', 'high', array('__block_editor_compatible_meta_box' => true));
     }
 
     public function meta_box($post) {
         $url = get_post_meta($post->ID, self::META_URL, true);
         $link_id = (string) get_post_meta($post->ID, self::META_ID, true);
+        $clicks = (int) get_post_meta($post->ID, self::META_CLICKS, true);
         $auto_error = (array) get_post_meta($post->ID, self::META_AUTO_ERROR, true);
         echo '<div class="shortlinker-box" data-shortlinker-post="' . esc_attr($post->ID) . '">';
         echo '<div class="shortlinker-result">';
         if (!empty($auto_error['message'])) echo '<div class="notice notice-error inline"><p><strong>' . esc_html__('Automatic generation failed:', 'shortlinker') . '</strong> ' . esc_html($auto_error['message']) . '</p></div>';
-        if ($url) echo '<div class="shortlinker-url-row"><a class="shortlinker-url" href="' . esc_url($url) . '" target="_blank" rel="noopener">' . esc_html($url) . '</a><button type="button" class="button button-small shortlinker-copy" data-shortlinker-copy-value="' . esc_attr($url) . '">' . esc_html__('Copy', 'shortlinker') . '</button></div><p><a href="' . esc_url(self::WEB_ANALYTICS . '/' . rawurlencode($link_id)) . '" target="_blank" rel="noopener">' . esc_html__('View detailed statistics', 'shortlinker') . ' ↗</a></p>';
+        if ($url) echo '<div class="shortlinker-url-row"><a class="shortlinker-url" href="' . esc_url($url) . '" target="_blank" rel="noopener">' . esc_html($url) . '</a><button type="button" class="button button-small shortlinker-copy" data-shortlinker-copy-value="' . esc_attr($url) . '">' . esc_html__('Copy', 'shortlinker') . '</button></div><p><span data-shortlinker-clicks-link data-post-id="' . esc_attr($post->ID) . '"><strong class="shortlinker-click-count">' . esc_html(number_format_i18n($clicks)) . '</strong> ' . esc_html__('clicks', 'shortlinker') . '</span> · <a href="' . esc_url(self::WEB_ANALYTICS . '/' . rawurlencode($link_id)) . '" target="_blank" rel="noopener">' . esc_html__('View detailed statistics', 'shortlinker') . ' ↗</a></p>';
         else echo '<p>' . esc_html__('No shortlink yet.', 'shortlinker') . '</p>';
         echo '</div><button type="button" class="button button-primary shortlinker-generate" data-replace="' . ($url ? '1' : '0') . '"' . ($post->post_status !== 'publish' ? ' disabled' : '') . '>';
         echo $url ? esc_html__('Regenerate', 'shortlinker') : esc_html__('Generate shortlink', 'shortlinker');
@@ -344,6 +352,48 @@ final class Shortlinker_WordPress {
         wp_send_json_success(array('id' => $result['id'], 'url' => $result['shortUrl']));
     }
 
+    public function ajax_click_counts() {
+        check_ajax_referer('shortlinker_stats_async', 'nonce');
+        if (!$this->can_configure()) wp_send_json_error(array('message' => __('Permission denied.', 'shortlinker')), 403);
+        $raw_ids = json_decode(wp_unslash($_POST['postIds'] ?? '[]'), true);
+        if (!is_array($raw_ids)) wp_send_json_error(array('message' => __('Invalid request.', 'shortlinker')), 400);
+        $post_ids = array_slice(array_values(array_unique(array_filter(array_map('absint', $raw_ids)))), 0, 100);
+        $link_to_post = array();
+        foreach ($post_ids as $post_id) {
+            $post = get_post($post_id);
+            if (!$post || !current_user_can('edit_post', $post_id) || !in_array($post->post_type, $this->selected_post_types(), true)) continue;
+            $link_id = (string) get_post_meta($post_id, self::META_ID, true);
+            if ($link_id) $link_to_post[$link_id] = $post_id;
+        }
+        if (!$link_to_post) wp_send_json_success(array('clicks' => array()));
+        $response = $this->api('POST', 'stats/clicks', array('ids' => array_keys($link_to_post)));
+        if (is_wp_error($response)) wp_send_json_error(array('message' => $response->get_error_message()), 502);
+        $clicks = array();
+        foreach ((array) ($response['data']['links'] ?? array()) as $item) {
+            $link_id = (string) ($item['id'] ?? '');
+            if (!isset($link_to_post[$link_id])) continue;
+            $post_id = $link_to_post[$link_id];
+            $count = max(0, (int) ($item['clicks'] ?? 0));
+            update_post_meta($post_id, self::META_CLICKS, $count);
+            $clicks[(string) $post_id] = $count;
+        }
+        wp_send_json_success(array('clicks' => $clicks));
+    }
+
+    public function ajax_stats_summary() {
+        check_ajax_referer('shortlinker_stats_async', 'nonce');
+        if (!$this->can_view_stats()) wp_send_json_error(array('message' => __('Permission denied.', 'shortlinker')), 403);
+        $cache_key = 'shortlinker_remote_stats_summary';
+        $data = get_transient($cache_key);
+        if (!is_array($data)) {
+            $response = $this->api('GET', 'stats/summary');
+            if (is_wp_error($response)) wp_send_json_error(array('message' => $response->get_error_message()), 502);
+            $data = (array) ($response['data'] ?? array());
+            set_transient($cache_key, $data, 5 * MINUTE_IN_SECONDS);
+        }
+        wp_send_json_success($data);
+    }
+
     public function add_column($columns) {
         if (!$this->can_configure()) return $columns;
         $columns['shortlinker'] = __('Shortlink', 'shortlinker');
@@ -355,7 +405,8 @@ final class Shortlinker_WordPress {
         $url = get_post_meta($post_id, self::META_URL, true);
         if (!$url) { echo '<span aria-hidden="true">—</span>'; return; }
         $link_id = (string) get_post_meta($post_id, self::META_ID, true);
-        echo '<a href="' . esc_url($url) . '" target="_blank" rel="noopener"><code>' . esc_html(wp_parse_url($url, PHP_URL_PATH)) . '</code></a><br><a href="' . esc_url(self::WEB_ANALYTICS . '/' . rawurlencode($link_id)) . '" target="_blank" rel="noopener">' . esc_html__('View stats', 'shortlinker') . ' ↗</a>';
+        $clicks = (int) get_post_meta($post_id, self::META_CLICKS, true);
+        echo '<a href="' . esc_url($url) . '" target="_blank" rel="noopener"><code>' . esc_html(wp_parse_url($url, PHP_URL_PATH)) . '</code></a><br><span data-shortlinker-clicks-link data-post-id="' . esc_attr($post_id) . '"><strong class="shortlinker-click-count">' . esc_html(number_format_i18n($clicks)) . '</strong> ' . esc_html__('clicks', 'shortlinker') . '</span> · <a href="' . esc_url(self::WEB_ANALYTICS . '/' . rawurlencode($link_id)) . '" target="_blank" rel="noopener">' . esc_html__('View stats', 'shortlinker') . ' ↗</a>';
     }
 
     private function bulk_post_type() {
@@ -445,6 +496,7 @@ final class Shortlinker_WordPress {
                 $data = $result['data'];
                 update_post_meta($post['id'], self::META_ID, sanitize_text_field($data['id']));
                 update_post_meta($post['id'], self::META_URL, esc_url_raw($data['shortUrl']));
+                update_post_meta($post['id'], self::META_CLICKS, 0);
                 $created++;
                 $items[] = array('status' => 'success', 'id' => $post['id'], 'title' => $post['title'], 'url' => $data['shortUrl']);
             }
@@ -588,7 +640,8 @@ final class Shortlinker_WordPress {
 
     private function statistics_tab() {
         $summary = $this->local_summary();
-        echo '<div class="shortlinker-metrics shortlinker-metrics-light"><div><span>' . esc_html__('Connected shortlinks', 'shortlinker') . '</span><strong>' . esc_html(number_format_i18n((int) $summary['shortlinks'])) . '</strong></div></div>';
+        echo '<div data-shortlinker-stats-summary><div class="shortlinker-metrics shortlinker-summary-metrics"><div><span>' . esc_html__('Connected shortlinks', 'shortlinker') . '</span><strong>' . esc_html(number_format_i18n((int) $summary['shortlinks'])) . '</strong></div><div><span>' . esc_html__('Global clicks', 'shortlinker') . '</span><strong data-shortlinker-global-clicks>…</strong></div></div>';
+        echo '<section class="shortlinker-performance"><h2>' . esc_html__('Top 5 links', 'shortlinker') . '</h2><p class="description" data-shortlinker-stats-status>' . esc_html__('Loading latest click statistics…', 'shortlinker') . '</p><ol class="shortlinker-dashboard-top" data-shortlinker-top-links></ol></section></div>';
         echo '<section class="shortlinker-performance shortlinker-remote-analytics"><h2>' . esc_html__('Detailed analytics on shurl.be', 'shortlinker') . '</h2>';
         echo '<p>' . esc_html__('WordPress no longer downloads or aggregates click data while pages are loading. Users with a shurl.be account can open the complete live statistics securely in the Shortlinker administration.', 'shortlinker') . '</p>';
         echo '<p><a class="button button-primary button-hero" href="' . esc_url(self::WEB_ANALYTICS) . '" target="_blank" rel="noopener">' . esc_html__('Open detailed analytics', 'shortlinker') . ' ↗</a></p></section>';

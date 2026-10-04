@@ -4,6 +4,21 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-10-04
+
+### Added
+
+- Lightweight API endpoints expose aggregate click counters and the five best-performing links without scanning raw click events.
+- WordPress plugin 1.3.1 restores global clicks, the top five links, and per-article click counters through asynchronous batched requests.
+
+### Fixed
+
+- The Classic Editor sidebar widget is registered according to the editor active for the current article instead of the post type's Gutenberg default.
+
+### Performance
+
+- WordPress screens render before analytics synchronization; article counters use one grouped request for up to 100 visible links and a local cached fallback.
+
 ## [0.3.6] - 2026-10-04
 
 ### Changed

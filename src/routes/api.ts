@@ -304,6 +304,40 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ data: { ...result.rows[0], countries: countries.rows, timeline: timeline.rows, browsers: browsers.rows, devices: devices.rows, referrers: referrers.rows } });
   });
 
+  app.get("/api/v1/stats/summary", async (request, reply) => {
+    const client = await authenticate(request, reply, "stats:read");
+    if (!client) return;
+    const [totals, topLinks] = await Promise.all([
+      db.query(
+        `SELECT count(*)::bigint AS links, coalesce(sum(click_count),0)::bigint AS clicks
+         FROM links WHERE deleted_at IS NULL AND ($1::uuid[]='{}' OR domain_id=ANY($1))`,
+        [client.domain_ids]
+      ),
+      db.query(
+        `SELECT l.id,d.hostname::text AS domain,l.slug,l.destination,l.click_count::bigint AS clicks
+         FROM links l JOIN domains d ON d.id=l.domain_id
+         WHERE l.deleted_at IS NULL AND ($1::uuid[]='{}' OR l.domain_id=ANY($1))
+         ORDER BY l.click_count DESC,l.created_at DESC LIMIT 5`,
+        [client.domain_ids]
+      )
+    ]);
+    return reply.send({ data: { ...totals.rows[0], topLinks: topLinks.rows } });
+  });
+
+  app.post("/api/v1/stats/clicks", async (request, reply) => {
+    const client = await authenticate(request, reply, "stats:read");
+    if (!client) return;
+    const parsed = statsBatchSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(422).send(validationError(parsed.error));
+    const result = await db.query(
+      `SELECT id,click_count::bigint AS clicks FROM links
+       WHERE id=ANY($1::uuid[]) AND deleted_at IS NULL
+       AND ($2::uuid[]='{}' OR domain_id=ANY($2))`,
+      [parsed.data.ids, client.domain_ids]
+    );
+    return reply.send({ data: { links: result.rows } });
+  });
+
   app.post("/api/v1/stats/batch", async (request, reply) => {
     const client = await authenticate(request, reply, "stats:read");
     if (!client) return;
@@ -369,6 +403,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
       "/links": { get: { summary: "List links" }, post: { summary: "Create a shortlink" } },
       "/links/batch": { post: { summary: "Create up to 50 shortlinks in one request" } },
       "/links/{id}/stats": { get: { summary: "Read link analytics" } },
+      "/stats/summary": { get: { summary: "Read aggregate clicks and the five best-performing links" } },
+      "/stats/clicks": { post: { summary: "Read click counters for up to 100 links" } },
       "/stats/batch": { post: { summary: "Read analytics for up to 100 links in one request" } },
       "/links/{id}": { delete: { summary: "Delete a link" } },
       "/domains": { get: { summary: "List available domains" } }

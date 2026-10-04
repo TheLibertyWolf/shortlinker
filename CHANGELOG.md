@@ -4,6 +4,12 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## [Unreleased]
 
+## [0.3.11] - 2026-10-04
+
+### Changed
+
+- Removed the administration login button from the public shurl.be homepage navigation.
+
 ## [0.3.10] - 2026-10-04
 
 ### Changed

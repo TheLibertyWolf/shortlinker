@@ -71,7 +71,7 @@ export function landingPage(): string {
   return `${head("High-performance links")}<body class="landing">
   <nav class="navbar navbar-expand-lg navbar-dark fixed-top"><div class="container py-2">
     <a class="navbar-brand" href="/"><span class="brand-mark">S</span>shurl.be</a>
-    <div class="ms-auto d-flex gap-2"><a href="#platform" class="btn btn-link text-light text-decoration-none">Platform</a><a href="/auth/login" class="btn btn-outline-light rounded-pill px-4">Admin</a></div>
+    <div class="ms-auto"><a href="#platform" class="btn btn-link text-light text-decoration-none">Platform</a></div>
   </div></nav>
   <main><section class="hero"><div class="hero-grid"></div><div class="container position-relative">
     <div class="hero-copy-block text-center mx-auto"><div class="hero-kicker mb-4"><span class="pulse-dot me-3"></span>The link intelligence layer</div>

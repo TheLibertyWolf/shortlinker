@@ -31,7 +31,9 @@ async function authenticate(request: FastifyRequest, reply: FastifyReply, scope:
   }
   if (client.allowed_cidrs.length && !ipMatchesCidrs(request.ip, client.allowed_cidrs)) {
     await audit(request, "api.ip.denied", { apiClientId: client.id, outcome: "failure" });
-    await reply.code(403).send({ error: { code: "ip_not_allowed", message: "Source IP is not allowed" } });
+    await reply.code(403).send({
+      error: { code: "ip_not_allowed", message: `Source IP is not allowed (observed: ${request.ip})`, observedIp: request.ip }
+    });
     return null;
   }
   try {

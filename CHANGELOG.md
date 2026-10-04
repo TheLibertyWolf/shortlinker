@@ -4,6 +4,12 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-04
+
+### Changed
+
+- IP allowlist failures now return the source IP observed by Shortlinker so NAT, IPv6 and outbound proxy mismatches can be diagnosed without weakening API restrictions.
+
 ## [0.3.2] - 2026-10-04
 
 ### Added

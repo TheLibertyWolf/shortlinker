@@ -64,6 +64,70 @@ function normalizeAccount(body: Record<string, string | string[]>): { username: 
   return { username, email, displayName, locale };
 }
 
+type AnalyticsBucket = { name: string; clicks: number };
+type AnalyticsTimeline = { day: string; clicks: number };
+
+function numberFor(value: unknown, session: UserSession): string {
+  return Number(value ?? 0).toLocaleString(localeTag(session.locale));
+}
+
+function countryFlag(code: string): string {
+  const normalized = code.toUpperCase();
+  if (!/^[A-Z]{2}$/.test(normalized)) return "🌐";
+  return String.fromCodePoint(...[...normalized].map((letter) => 127397 + letter.charCodeAt(0)));
+}
+
+function countryName(code: string, session: UserSession): string {
+  if (!/^[A-Z]{2}$/i.test(code)) return session.locale === "fr" ? "Inconnu" : "Unknown";
+  try { return new Intl.DisplayNames([localeTag(session.locale)], { type: "region" }).of(code.toUpperCase()) ?? code; }
+  catch { return code; }
+}
+
+function referrerName(value: string): string {
+  if (!value || value === "Direct") return "Direct";
+  try { return new URL(value).hostname || value; }
+  catch { return value; }
+}
+
+function rankBars(items: AnalyticsBucket[], session: UserSession, kind: "country" | "referrer" | "default" = "default"): string {
+  if (!items.length) return '<div class="stats-empty"><i class="bi bi-bar-chart"></i><span>No data for this period.</span></div>';
+  const maximum = Math.max(1, ...items.map((item) => Number(item.clicks)));
+  return items.map((item, index) => {
+    const percent = Math.max(5, Math.min(100, Math.round((Number(item.clicks) / maximum) * 20) * 5));
+    const rawName = String(item.name ?? "Unknown");
+    const display = kind === "country" ? `${countryFlag(rawName)} ${countryName(rawName, session)}` : kind === "referrer" ? referrerName(rawName) : rawName;
+    return `<div class="stats-rank-row stats-color-${index % 4}"><div><span title="${escapeHtml(rawName)}">${escapeHtml(display)}</span><strong>${numberFor(item.clicks, session)}</strong></div><i><b class="stats-w-${percent}"></b></i></div>`;
+  }).join("");
+}
+
+function timelineChart(items: AnalyticsTimeline[], session: UserSession): string {
+  if (!items.length) return '<div class="stats-empty stats-empty-chart"><i class="bi bi-graph-up"></i><span>No traffic for this period.</span></div>';
+  const width = 920; const height = 280; const left = 52; const right = 18; const top = 18; const bottom = 34;
+  const plotWidth = width - left - right; const plotHeight = height - top - bottom;
+  const maximum = Math.max(1, ...items.map((item) => Number(item.clicks)));
+  const x = (index: number) => left + (items.length === 1 ? 0 : index / (items.length - 1) * plotWidth);
+  const y = (value: number) => top + plotHeight - value / maximum * plotHeight;
+  const points = items.map((item, index) => `${x(index).toFixed(1)},${y(Number(item.clicks)).toFixed(1)}`).join(" ");
+  const grids = Array.from({ length: 5 }, (_, index) => {
+    const gridY = top + index / 4 * plotHeight;
+    const label = Math.round(maximum * (1 - index / 4));
+    return `<line x1="${left}" y1="${gridY}" x2="${width - right}" y2="${gridY}" class="stats-chart-grid"/><text x="${left - 10}" y="${gridY + 4}" text-anchor="end" class="stats-chart-label">${numberFor(label, session)}</text>`;
+  }).join("");
+  const pointStep = Math.max(1, Math.ceil(items.length / 30));
+  const dots = items.map((item, index) => index % pointStep === 0 || index === items.length - 1 ? `<circle cx="${x(index).toFixed(1)}" cy="${y(Number(item.clicks)).toFixed(1)}" r="3"><title>${escapeHtml(item.day)} · ${numberFor(item.clicks, session)} ${session.locale === "fr" ? "clics" : "clicks"}</title></circle>` : "").join("");
+  const dateLabel = (item: AnalyticsTimeline) => new Date(`${item.day}T00:00:00Z`).toLocaleDateString(localeTag(session.locale), { day: "numeric", month: "short", timeZone: "UTC" });
+  const middle = items[Math.floor((items.length - 1) / 2)]!;
+  return `<div class="stats-line-chart"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Click timeline"><defs><linearGradient id="statsArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7457ff" stop-opacity=".38"/><stop offset="1" stop-color="#19d3da" stop-opacity=".03"/></linearGradient></defs>${grids}<polygon points="${left},${top + plotHeight} ${points} ${width - right},${top + plotHeight}" class="stats-chart-area"/><polyline points="${points}" class="stats-chart-line"/>${dots}</svg><div class="stats-chart-dates"><span>${dateLabel(items[0]!)}</span><span>${dateLabel(middle)}</span><span>${dateLabel(items[items.length - 1]!)}</span></div></div>`;
+}
+
+function audienceDonut(humans: number, robots: number, session: UserSession): string {
+  const classified = humans + robots;
+  const percentage = classified ? Math.round(humans / classified * 100) : 0;
+  const circumference = 339.292;
+  const humanArc = circumference * percentage / 100;
+  return `<div class="stats-donut"><svg viewBox="0 0 140 140" role="img" aria-label="Human and robot traffic"><circle class="stats-donut-track" cx="70" cy="70" r="54"/><circle class="stats-donut-value" cx="70" cy="70" r="54" stroke-dasharray="${humanArc.toFixed(2)} ${circumference.toFixed(2)}"/><text x="70" y="67" text-anchor="middle" class="stats-donut-number">${percentage}%</text><text x="70" y="84" text-anchor="middle" class="stats-donut-label">${session.locale === "fr" ? "HUMAIN" : "HUMAN"}</text></svg><div class="stats-donut-legend"><span><i class="is-human"></i>Humans <strong>${numberFor(humans, session)}</strong></span><span><i class="is-robot"></i>Robots <strong>${numberFor(robots, session)}</strong></span></div></div>`;
+}
+
 export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get("/admin", async (request, reply) => {
     const session = await sessionFor(request, reply);
@@ -104,37 +168,66 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const domainId = allowedIds.has(String(query.domain)) ? String(query.domain) : "";
     const requestedDays = Number(query.days) || 30;
     const days = [7, 30, 90, 365].includes(requestedDays) ? requestedDays : 30;
-    const summary = await db.query<{links:number;clicks:number;uniques:number;humans:number;robots:number}>(
-      `WITH allowed_links AS (
-         SELECT id FROM links WHERE deleted_at IS NULL
-           AND ($1::uuid[] IS NULL OR domain_id=ANY($1)) AND ($2::text='' OR domain_id::text=$2)
+    type StatsDashboard = {
+      active_links:number; total_clicks:number; period_clicks:number; uniques:number; humans:number; robots:number;
+      timeline:AnalyticsTimeline[]; countries:AnalyticsBucket[]; browsers:AnalyticsBucket[]; operatingSystems:AnalyticsBucket[];
+      devices:AnalyticsBucket[]; referrers:AnalyticsBucket[]; domains:AnalyticsBucket[];
+      topLinks:Array<{id:string;domain:string;slug:string;destination:string;clicks:number}>;
+      recent:Array<{clickedAt:string;visitorClass:string;country:string;userAgent:string;browser:string;operatingSystem:string;deviceType:string;referrer:string;linkId:string;domain:string;slug:string}>;
+    };
+    const dashboardResult = await db.query<StatsDashboard>(
+      `WITH allowed_links AS MATERIALIZED (
+         SELECT l.id,l.domain_id,l.slug,l.destination,l.status,l.click_count,d.hostname::text AS domain
+         FROM links l JOIN domains d ON d.id=l.domain_id
+         WHERE l.deleted_at IS NULL AND ($1::uuid[] IS NULL OR l.domain_id=ANY($1))
+           AND ($2::text='' OR l.domain_id::text=$2)
+       ), period_events AS MATERIALIZED (
+         SELECT e.clicked_at,e.visitor_hash,e.visitor_class,e.country_code,e.user_agent,e.browser,e.operating_system,e.device_type,e.referrer,
+                l.id AS link_id,l.domain,l.slug,l.destination
+         FROM click_events e JOIN allowed_links l ON l.id=e.link_id
+         WHERE e.clicked_at >= current_date - ($3::int - 1) * interval '1 day'
+       ), daily AS (
+         SELECT clicked_at::date AS day,count(*)::int AS clicks FROM period_events GROUP BY clicked_at::date
        ) SELECT
-         (SELECT count(*) FROM allowed_links)::int AS links,
-         count(e.id)::int AS clicks,
-         count(DISTINCT e.visitor_hash)::int AS uniques,
-         count(e.id) FILTER (WHERE e.visitor_class='human')::int AS humans,
-         count(e.id) FILTER (WHERE e.visitor_class='robot')::int AS robots
-       FROM click_events e JOIN allowed_links l ON l.id=e.link_id
-       WHERE e.clicked_at >= now() - ($3 || ' days')::interval`, [scope, domainId, days]
+         (SELECT count(*) FROM allowed_links WHERE status='active')::int AS active_links,
+         (SELECT coalesce(sum(click_count),0) FROM allowed_links)::bigint AS total_clicks,
+         (SELECT count(*) FROM period_events)::int AS period_clicks,
+         (SELECT count(DISTINCT visitor_hash) FROM period_events)::int AS uniques,
+         (SELECT count(*) FROM period_events WHERE visitor_class='human')::int AS humans,
+         (SELECT count(*) FROM period_events WHERE visitor_class='robot')::int AS robots,
+         coalesce((SELECT jsonb_agg(jsonb_build_object('day',to_char(series.day,'YYYY-MM-DD'),'clicks',coalesce(daily.clicks,0)) ORDER BY series.day)
+           FROM generate_series(current_date-($3::int-1),current_date,interval '1 day') series(day) LEFT JOIN daily ON daily.day=series.day::date),'[]') AS timeline,
+         coalesce((SELECT jsonb_agg(row_to_json(item) ORDER BY item.clicks DESC) FROM (SELECT coalesce(country_code::text,'--') AS name,count(*)::int AS clicks FROM period_events GROUP BY 1 ORDER BY clicks DESC LIMIT 12) item),'[]') AS countries,
+         coalesce((SELECT jsonb_agg(row_to_json(item) ORDER BY item.clicks DESC) FROM (SELECT coalesce(nullif(browser,''),'Unknown') AS name,count(*)::int AS clicks FROM period_events GROUP BY 1 ORDER BY clicks DESC LIMIT 8) item),'[]') AS browsers,
+         coalesce((SELECT jsonb_agg(row_to_json(item) ORDER BY item.clicks DESC) FROM (SELECT coalesce(nullif(operating_system,''),'Unknown') AS name,count(*)::int AS clicks FROM period_events GROUP BY 1 ORDER BY clicks DESC LIMIT 8) item),'[]') AS "operatingSystems",
+         coalesce((SELECT jsonb_agg(row_to_json(item) ORDER BY item.clicks DESC) FROM (SELECT coalesce(nullif(device_type,''),'Unknown') AS name,count(*)::int AS clicks FROM period_events GROUP BY 1 ORDER BY clicks DESC LIMIT 8) item),'[]') AS devices,
+         coalesce((SELECT jsonb_agg(row_to_json(item) ORDER BY item.clicks DESC) FROM (SELECT coalesce(nullif(referrer,''),'Direct') AS name,count(*)::int AS clicks FROM period_events GROUP BY 1 ORDER BY clicks DESC LIMIT 10) item),'[]') AS referrers,
+         coalesce((SELECT jsonb_agg(row_to_json(item) ORDER BY item.clicks DESC) FROM (SELECT domain AS name,count(*)::int AS clicks FROM period_events GROUP BY 1 ORDER BY clicks DESC LIMIT 12) item),'[]') AS domains,
+         coalesce((SELECT jsonb_agg(row_to_json(item) ORDER BY item.clicks DESC) FROM (SELECT link_id AS id,domain,slug,destination,count(*)::int AS clicks FROM period_events GROUP BY link_id,domain,slug,destination ORDER BY clicks DESC LIMIT 5) item),'[]') AS "topLinks",
+         coalesce((SELECT jsonb_agg(row_to_json(item) ORDER BY item."clickedAt" DESC) FROM (SELECT clicked_at AS "clickedAt",visitor_class AS "visitorClass",coalesce(country_code::text,'--') AS country,coalesce(user_agent,'') AS "userAgent",coalesce(browser,'Unknown') AS browser,coalesce(operating_system,'Unknown') AS "operatingSystem",coalesce(device_type,'Unknown') AS "deviceType",coalesce(referrer,'Direct') AS referrer,link_id AS "linkId",domain,slug FROM period_events ORDER BY clicked_at DESC LIMIT 50) item),'[]') AS recent`,
+      [scope, domainId, days]
     );
-    const top = await db.query(
-      `SELECT l.id,d.hostname::text,l.slug,l.destination,l.click_count FROM links l JOIN domains d ON d.id=l.domain_id
-       WHERE l.deleted_at IS NULL AND ($1::uuid[] IS NULL OR l.domain_id=ANY($1)) AND ($2::text='' OR l.domain_id::text=$2)
-       ORDER BY l.click_count DESC LIMIT 25`, [scope, domainId]
-    );
-    const byDomain = await db.query(
-      `SELECT d.id,d.hostname::text,count(l.id)::int AS links,coalesce(sum(l.click_count),0)::bigint AS clicks
-       FROM domains d LEFT JOIN links l ON l.domain_id=d.id AND l.deleted_at IS NULL
-       WHERE d.status='active' AND ($1::uuid[] IS NULL OR d.id=ANY($1)) AND ($2::text='' OR d.id::text=$2)
-       GROUP BY d.id,d.hostname ORDER BY clicks DESC`, [scope, domainId]
-    );
-    const stat = summary.rows[0] ?? {links:0,clicks:0,uniques:0,humans:0,robots:0};
-    const cards = [["Links",stat.links],[`Clicks · ${days} days`,stat.clicks],["Unique visitors",stat.uniques],["Humans",stat.humans],["Robots",stat.robots]].map(([label,value])=>`<div class="col-6 col-xl"><div class="card metric-card h-100"><div class="card-body"><div class="text-secondary">${label}</div><div class="metric-value">${Number(value).toLocaleString(localeTag(session.locale))}</div></div></div></div>`).join("");
+    const stat = dashboardResult.rows[0] ?? { active_links:0,total_clicks:0,period_clicks:0,uniques:0,humans:0,robots:0,timeline:[],countries:[],browsers:[],operatingSystems:[],devices:[],referrers:[],domains:[],topLinks:[],recent:[] };
     const domainOptions = domains.rows.map(domain=>`<option value="${domain.id}" ${domain.id===domainId?"selected":""}>${escapeHtml(domain.hostname)}</option>`).join("");
-    const domainRows = byDomain.rows.map(domain=>`<tr><td>${escapeHtml(domain.hostname)}</td><td class="text-end">${Number(domain.links).toLocaleString(localeTag(session.locale))}</td><td class="text-end fw-semibold">${Number(domain.clicks).toLocaleString(localeTag(session.locale))}</td></tr>`).join("") || '<tr><td colspan="3" class="text-center text-secondary">No domain data.</td></tr>';
-    const topRows = top.rows.map(link=>`<tr><td><a class="fw-semibold text-decoration-none" href="/admin/links/${link.id}">https://${escapeHtml(link.hostname)}/${escapeHtml(link.slug)}</a><div class="small text-secondary text-truncate" style="max-width:460px">${escapeHtml(link.destination)}</div></td><td class="text-end fw-semibold">${Number(link.click_count).toLocaleString(localeTag(session.locale))}</td></tr>`).join("") || '<tr><td colspan="2" class="text-center text-secondary">No links.</td></tr>';
-    const filters = `<form method="get" action="/admin/stats" class="card panel-card mb-4"><div class="card-body"><div class="row g-3 align-items-end"><div class="col-md-6"><label class="form-label">Domain</label><select class="form-select" name="domain"><option value="">All allowed domains</option>${domainOptions}</select></div><div class="col-md-4"><label class="form-label">Period</label><select class="form-select" name="days">${[7,30,90,365].map(value=>`<option value="${value}" ${days===value?"selected":""}>Last ${value} days</option>`).join("")}</select></div><div class="col-md-2"><button class="btn btn-primary w-100">Apply</button></div></div></div></form>`;
-    const content = `${filters}<div class="row g-3 mb-4">${cards}</div><div class="row g-4"><div class="col-xl-4"><div class="card panel-card"><div class="card-header bg-white fw-bold">Allowed domains</div><div class="table-responsive"><table class="table mb-0"><thead><tr><th>Domain</th><th class="text-end">Links</th><th class="text-end">Clicks</th></tr></thead><tbody>${domainRows}</tbody></table></div></div></div><div class="col-xl-8"><div class="card panel-card"><div class="card-header bg-white fw-bold">Top-performing links</div><div class="table-responsive"><table class="table mb-0"><thead><tr><th>Link</th><th class="text-end">Clicks</th></tr></thead><tbody>${topRows}</tbody></table></div></div></div></div>`;
+    const periodOptions = [7,30,90,365].map(value=>`<option value="${value}" ${days===value?"selected":""}>${session.locale === "fr" ? `${value} derniers jours` : `Last ${value} days`}</option>`).join("");
+    const filters = `<form method="get" action="/admin/stats" class="stats-filter-card"><div><span class="stats-filter-kicker">ANALYTICS SCOPE</span><strong>Explore your traffic</strong></div><label><span>Domain</span><select class="form-select" name="domain"><option value="">All allowed domains</option>${domainOptions}</select></label><label><span>Period</span><select class="form-select" name="days">${periodOptions}</select></label><button class="btn btn-primary"><i class="bi bi-funnel"></i> Apply</button></form>`;
+    const kpis = [
+      ["Total clicks",stat.total_clicks,"All time","activity","violet"],
+      ["Period clicks",stat.period_clicks,`${days} ${session.locale === "fr" ? "jours" : "days"}`,"graph-up-arrow","cyan"],
+      ["Unique visitors",stat.uniques,"Anonymous estimate","people","blue"],
+      ["Humans",stat.humans,"Qualified traffic","person-check","green"],
+      ["Robots",stat.robots,"Automated traffic","robot","orange"],
+      ["Active links",stat.active_links,"Within your access","link-45deg","pink"]
+    ].map(([label,value,caption,glyph,color])=>`<article class="stats-kpi is-${color}"><div><span>${label}</span><strong>${numberFor(value,session)}</strong><small>${caption}</small></div><i class="bi bi-${glyph}"></i></article>`).join("");
+    const classified = Number(stat.humans) + Number(stat.robots);
+    const topMaximum = Math.max(1,...stat.topLinks.map(link=>Number(link.clicks)));
+    const topLinks = stat.topLinks.map((link,index)=>{const percent=Math.max(5,Math.round(Number(link.clicks)/topMaximum*20)*5);return `<article class="stats-top-link"><b>${String(index+1).padStart(2,"0")}</b><div><a href="/admin/links/${link.id}">${escapeHtml(link.domain)}/${escapeHtml(link.slug)}</a><small title="${escapeHtml(link.destination)}">${escapeHtml(link.destination)}</small><i><span class="stats-w-${percent}"></span></i></div><strong>${numberFor(link.clicks,session)}</strong></article>`;}).join("") || '<div class="stats-empty"><i class="bi bi-link-45deg"></i><span>No data for this period.</span></div>';
+    const recentRows = stat.recent.map(event=>{
+      const client=[event.browser,event.operatingSystem,event.deviceType].filter(value=>value&&value!=="Unknown").join(" · ")||"Unknown";
+      const badge=event.visitorClass==="human"?"success":event.visitorClass==="robot"?"warning":"secondary";
+      return `<tr><td class="text-nowrap">${new Date(event.clickedAt).toLocaleString(localeTag(session.locale))}</td><td><span class="badge text-bg-${badge}">${escapeHtml(event.visitorClass)}</span></td><td><span class="country-flag">${countryFlag(event.country)}</span> ${escapeHtml(countryName(event.country,session))}</td><td><a class="fw-semibold text-decoration-none" href="/admin/links/${event.linkId}">${escapeHtml(event.domain)}/${escapeHtml(event.slug)}</a></td><td><span title="${escapeHtml(event.userAgent)}">${escapeHtml(client)}</span></td><td class="stats-referrer" title="${escapeHtml(event.referrer)}">${escapeHtml(referrerName(event.referrer))}</td></tr>`;
+    }).join("")||'<tr><td colspan="6" class="text-center text-secondary py-5">No traffic for this period.</td></tr>';
+    const content = `${filters}<section class="stats-kpi-grid">${kpis}</section><section class="stats-primary-grid"><article class="stats-panel stats-panel-wide"><header><div><span>TRAFFIC</span><h2>Clicks over time</h2></div><div class="stats-live-pill"><i></i>${session.locale==="fr"?`${days} jours`:`${days} days`}</div></header>${timelineChart(stat.timeline,session)}</article><article class="stats-panel"><header><div><span>AUDIENCE</span><h2>Humans vs robots</h2></div><small>${numberFor(classified,session)} ${session.locale === "fr" ? "classés" : "classified"}</small></header>${audienceDonut(Number(stat.humans),Number(stat.robots),session)}</article></section><section class="stats-breakdown-grid"><article class="stats-panel"><header><div><span>GEOGRAPHY</span><h2>Top countries</h2></div><i class="bi bi-globe2"></i></header>${rankBars(stat.countries,session,"country")}</article><article class="stats-panel"><header><div><span>TECHNOLOGY</span><h2>Browsers</h2></div><i class="bi bi-browser-chrome"></i></header>${rankBars(stat.browsers,session)}</article><article class="stats-panel"><header><div><span>TECHNOLOGY</span><h2>Operating systems</h2></div><i class="bi bi-window"></i></header>${rankBars(stat.operatingSystems,session)}</article><article class="stats-panel"><header><div><span>TECHNOLOGY</span><h2>Devices</h2></div><i class="bi bi-phone"></i></header>${rankBars(stat.devices,session)}</article></section><section class="stats-secondary-grid"><article class="stats-panel"><header><div><span>ACQUISITION</span><h2>Top referrers</h2></div><i class="bi bi-signpost-split"></i></header>${rankBars(stat.referrers,session,"referrer")}</article><article class="stats-panel"><header><div><span>PERFORMANCE</span><h2>Top-performing links</h2></div><i class="bi bi-trophy"></i></header><div class="stats-top-links">${topLinks}</div></article><article class="stats-panel"><header><div><span>DISTRIBUTION</span><h2>Domains</h2></div><i class="bi bi-diagram-3"></i></header>${rankBars(stat.domains,session)}</article></section><section class="stats-panel stats-recent"><header><div><span>REAL-TIME DETAIL</span><h2>Latest visits</h2></div><small>50 most recent events in the selected period</small></header><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Time</th><th>Type</th><th>Country</th><th>Shortlink</th><th>Client</th><th>Referrer</th></tr></thead><tbody>${recentRows}</tbody></table></div></section>`;
     return reply.type("text/html").send(adminLayout("Statistics", "/admin/stats", session, content));
   });
 

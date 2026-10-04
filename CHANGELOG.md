@@ -4,6 +4,19 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-10-04
+
+### Added
+
+- A complete, responsive web administration analytics dashboard with colored KPI cards, a temporal traffic graph and a human/robot chart.
+- Country rankings with flags, browsers, operating systems, devices, referrers, domains and period-specific top links.
+- A latest-visits table with timestamp, visitor type, country, shortlink, parsed client and referrer.
+
+### Changed
+
+- Statistics support 7, 30, 90 and 365-day periods and continue to enforce each user's domain access scope.
+- The analytics query materializes its filtered event set once, keeping the complete panel fast even with large link inventories.
+
 ## [0.3.7] - 2026-10-04
 
 ### Added

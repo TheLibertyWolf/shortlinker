@@ -26,7 +26,7 @@ function head(title: string, turnstile = false, locale: Locale = "en", pwa = fal
   <meta name="theme-color" content="#0b1120">
   <link rel="stylesheet" href="/assets/vendor/bootstrap/bootstrap.min.css">
   <link rel="stylesheet" href="/assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="/assets/app.css?v=20261004-5">
+  <link rel="stylesheet" href="/assets/app.css?v=20261004-6">
   ${turnstile ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ""}
   </head>`;
 }

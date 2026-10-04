@@ -26,7 +26,7 @@ function head(title: string, turnstile = false, locale: Locale = "en", pwa = fal
   <meta name="theme-color" content="#0b1120">
   <link rel="stylesheet" href="/assets/vendor/bootstrap/bootstrap.min.css">
   <link rel="stylesheet" href="/assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="/assets/app.css?v=20261004-7">
+  <link rel="stylesheet" href="/assets/app.css?v=20261004-8">
   ${turnstile ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ""}
   </head>`;
 }
@@ -64,7 +64,7 @@ export function adminLayout(title: string, active: string, session: UserSession,
       <header class="d-flex align-items-center justify-content-between mb-4"><div><div class="text-uppercase text-secondary small fw-bold">${escapeHtml(translate(session.locale,"Control plane"))}</div><h1 class="h2 mb-0 fw-bold">${escapeHtml(localizedTitle)}</h1></div><span class="badge rounded-pill text-bg-dark"><span class="pulse-dot me-2"></span>${escapeHtml(translate(session.locale,"Live"))}</span></header>
       ${localizedContent}
     </main>
-  </div><script src="/assets/vendor/bootstrap/bootstrap.bundle.min.js"></script><script src="/assets/app.js?v=20261004-5"></script></body></html>`;
+  </div><script src="/assets/vendor/bootstrap/bootstrap.bundle.min.js"></script><script src="/assets/app.js?v=20261004-6"></script></body></html>`;
 }
 
 export function landingPage(): string {

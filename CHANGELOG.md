@@ -4,6 +4,13 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-10-04
+
+### Changed
+
+- Domain homepage editing now opens in a Bootstrap modal from an Edit button beside DNS verification.
+- The custom URL field is fully hidden unless custom HTTPS behaviour is selected, both when attaching and editing a domain.
+
 ## [0.3.9] - 2026-10-04
 
 ### Added

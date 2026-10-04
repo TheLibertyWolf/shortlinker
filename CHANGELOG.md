@@ -4,6 +4,24 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-04
+
+### Added
+
+- WordPress plugin 1.3.0 with optional automatic shortlink generation on the first transition to the published status.
+- Independent automatic-generation switches for posts, pages and every supported public custom post type.
+- A one-click shortlink copy button in both WordPress editor widgets.
+- Per-user domain allowlists, a domain-scoped statistics panel, and a dedicated statistics-only access path.
+- Search, domain, status, sort and page-size filters on the administration link list.
+- PostgreSQL indexes for domain-scoped lists and large destination/slug searches.
+
+### Changed
+
+- Automatic publication never replaces an existing shortlink and uses a stable idempotency key to prevent duplicates when a request is retried.
+- Automatic-generation failures are retained and displayed in both the block editor and Classic Editor for manual retry.
+- WordPress dashboard, statistics and article-list views no longer fetch API analytics or aggregate large post metadata sets during page rendering.
+- Detailed WordPress analytics now open the authoritative domain-restricted view on shurl.be.
+
 ## [0.3.3] - 2026-10-04
 
 ### Changed

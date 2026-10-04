@@ -12,11 +12,69 @@
     if (!response.ok || !result.success) throw new Error((result.data && result.data.message) || ShortlinkerAdmin.error);
     return result.data;
   };
+  const copyText = async (value) => {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(value);
+    const input = document.createElement("textarea");
+    input.value = value;
+    input.style.position = "fixed";
+    input.style.opacity = "0";
+    document.body.appendChild(input);
+    input.select();
+    const copied = document.execCommand("copy");
+    input.remove();
+    if (!copied) throw new Error(ShortlinkerAdmin.copyError);
+  };
+  const renderShortlink = (container, url, linkId) => {
+    const row = document.createElement("div");
+    row.className = "shortlinker-url-row";
+    const link = document.createElement("a");
+    link.className = "shortlinker-url";
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = url;
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "button button-small shortlinker-copy";
+    copy.dataset.shortlinkerCopyValue = url;
+    copy.textContent = ShortlinkerAdmin.copy;
+    const stats = document.createElement("p");
+    const statsLink = document.createElement("a");
+    statsLink.href = `${ShortlinkerAdmin.analyticsUrl}/${encodeURIComponent(linkId)}`;
+    statsLink.target = "_blank";
+    statsLink.rel = "noopener";
+    statsLink.textContent = `${ShortlinkerAdmin.viewStats} ↗`;
+    stats.appendChild(statsLink);
+    row.append(link, copy);
+    container.replaceChildren(row, stats);
+  };
 
   document.querySelectorAll("[data-shortlinker-confirm]").forEach((form) => {
     form.addEventListener("submit", (event) => {
       if (!window.confirm(form.dataset.shortlinkerConfirm)) event.preventDefault();
     });
+  });
+
+  document.querySelectorAll(".shortlinker-post-type-setting").forEach((setting) => {
+    const enabled = setting.querySelector("[data-shortlinker-enable-type]");
+    const automatic = setting.querySelector("[data-shortlinker-auto-type]");
+    if (!enabled || !automatic) return;
+    enabled.addEventListener("change", () => {
+      automatic.disabled = !enabled.checked;
+      if (!enabled.checked) automatic.checked = false;
+    });
+  });
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest(".shortlinker-copy");
+    if (!button) return;
+    const original = button.textContent;
+    try {
+      await copyText(button.dataset.shortlinkerCopyValue || "");
+      button.textContent = ShortlinkerAdmin.copied;
+    } catch (_) {
+      button.textContent = ShortlinkerAdmin.copyError;
+    }
+    window.setTimeout(() => { button.textContent = original; }, 1800);
   });
   document.querySelectorAll(".shortlinker-generate").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -31,7 +89,7 @@
         const response = await fetch(ShortlinkerAdmin.ajaxUrl, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: data });
         const result = await response.json();
         if (!result.success) throw new Error((result.data && result.data.message) || ShortlinkerAdmin.error);
-        box.querySelector(".shortlinker-result").innerHTML = `<a class="shortlinker-url" href="${result.data.url}" target="_blank" rel="noopener">${result.data.url}</a><p><strong>0</strong> ${ShortlinkerAdmin.clickLabel}</p>`;
+        renderShortlink(box.querySelector(".shortlinker-result"), result.data.url, result.data.id);
         button.dataset.replace = "1";
         button.textContent = ShortlinkerAdmin.regenerate;
         box.querySelector(".shortlinker-message").textContent = "✓";

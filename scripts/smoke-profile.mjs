@@ -13,6 +13,7 @@ const adminCsrf = randomBytes(24).toString("base64url");
 let userId;
 let adminId;
 let apiClientId;
+let primaryDomain;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -36,16 +37,19 @@ async function request(path, token, options = {}) {
 try {
   const passwordHash = await hashPassword(randomBytes(24).toString("base64url"));
   const created = await db.query(
-    `INSERT INTO users(username,email,display_name,password_hash,require_password_change,locale)
-     VALUES($1,$2,$3,$4,false,'en') RETURNING id`,
+    `INSERT INTO users(username,email,display_name,password_hash,require_password_change,locale,all_domains)
+     VALUES($1,$2,$3,$4,false,'en',false) RETURNING id`,
     [`profile-${suffix}`, `profile-${suffix}@example.test`, "Profile Smoke", passwordHash]
   );
   userId = created.rows[0].id;
   const admin = await db.query("SELECT id FROM users WHERE username='arnaud'");
   assert(admin.rowCount === 1, "administrator account is unavailable");
   adminId = admin.rows[0].id;
+  primaryDomain = await db.query("SELECT id,hostname::text FROM domains WHERE is_primary=true LIMIT 1");
+  assert(primaryDomain.rowCount === 1, "primary domain is unavailable");
+  await db.query("INSERT INTO user_permission_overrides(user_id,permission_code,allowed) VALUES($1,'stats.read',true),($1,'links.read',false)", [userId]);
+  await db.query("INSERT INTO user_domain_access(user_id,domain_id) VALUES($1,$2)", [userId, primaryDomain.rows[0].id]);
   const apiSecret = `smoke-wordpress-${suffix}`;
-  const primaryDomain = await db.query("SELECT id FROM domains WHERE is_primary=true LIMIT 1");
   const apiClient = await db.query(
     `INSERT INTO api_clients(name,token_prefix,token_hash,token_ciphertext,scopes,allowed_cidrs,domain_ids,created_by)
      VALUES($1,$2,$3,$4,$5,$6::cidr[],$7::uuid[],$8) RETURNING id`,
@@ -82,6 +86,12 @@ try {
   assert(french.status === 200 && frenchHtml.includes('<html lang="fr">'), "French preference was not applied");
   assert(frenchHtml.includes("Informations personnelles") && frenchHtml.includes(`profil-${suffix}@example.test`), "French profile content is incomplete");
 
+  const scopedStats = await request(`/admin/stats?domain=${primaryDomain.rows[0].id}&days=7`, userToken);
+  const scopedStatsHtml = await scopedStats.text();
+  assert(scopedStats.status === 200 && scopedStatsHtml.includes(primaryDomain.rows[0].hostname), "domain-scoped statistics are unavailable");
+  const deniedLinks = await request("/admin/links", userToken);
+  assert(deniedLinks.status === 403, "statistics-only user unexpectedly received link-list access");
+
   const managedEmail = `managed-${suffix}@example.test`;
   const managedUpdate = await request(`/admin/users/${userId}/account`, adminToken, {
     method: "POST",
@@ -100,6 +110,9 @@ try {
   const settings = await request("/admin/settings", adminToken);
   const settingsHtml = await settings.text();
   assert(settings.status === 200 && settingsHtml.includes('name="days"') && settingsHtml.includes('max="365"'), "365-day retention control is unavailable");
+  const privileges = await request(`/admin/users/${userId}`, adminToken);
+  const privilegesHtml = await privileges.text();
+  assert(privileges.status === 200 && privilegesHtml.includes('name="domain_ids"') && privilegesHtml.includes('name="all_domains"'), "per-user domain controls are unavailable");
 
   const legacy = await request("/admin/security", adminToken);
   assert(legacy.status === 308 && legacy.headers.get("location") === "/admin/profile", "legacy security URL does not redirect to profile");
@@ -111,7 +124,7 @@ try {
   const wordpressHtml = await wordpressConfig.text();
   assert(wordpressConfig.status === 200 && wordpressHtml.includes(apiSecret) && wordpressHtml.includes('WordPress connection block'), "reusable WordPress configuration is incomplete");
 
-  console.log(JSON.stringify({ ok: true, profile: 200, locale: "fr", managedEmail: true, retentionMax: 365, legacyRedirect: 308, wordpressConfig: true }));
+  console.log(JSON.stringify({ ok: true, profile: 200, locale: "fr", managedEmail: true, domainScopedStats: true, statsOnly: true, retentionMax: 365, legacyRedirect: 308, wordpressConfig: true }));
 } finally {
   if (userId) {
     await db.query("DELETE FROM audit_logs WHERE actor_user_id=$1 OR target_id=$1::text", [userId]);

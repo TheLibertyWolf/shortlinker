@@ -4,7 +4,7 @@ Tags: shortlink, analytics, url shortener, shurl, api
 Requires at least: 6.5
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -14,7 +14,8 @@ Create and monitor shurl.be shortlinks from the WordPress editor.
 
 Shortlinker connects WordPress to a dedicated, IP-restricted Shortlinker API client.
 It supports posts, pages and public custom post types, editor generation and regeneration,
-click columns, delegated access, safe batch generation and an aggregate analytics panel.
+lightweight link columns, delegated access, safe batch generation and remote detailed analytics.
+Automatic generation can be enabled independently for posts, pages and each public custom post type.
 
 == Installation ==
 
@@ -31,6 +32,14 @@ Every state-changing action uses WordPress capabilities and nonces. Protect Word
 and database access because the API token is stored in the WordPress options table.
 
 == Changelog ==
+
+= 1.3.0 =
+* Added optional automatic shortlink generation when content first transitions to published.
+* Automatic generation can be enabled or disabled independently for every supported post type.
+* Existing shortlinks are never replaced, and failures remain visible in the block or classic editor for manual retry.
+* Added a copy button beside the shortlink in the block and classic editor widgets.
+* Removed API synchronization and large metadata aggregations from normal WordPress page loads.
+* Replaced the local analytics table with a cached summary and secure links to detailed analytics on shurl.be.
 
 = 1.2.0 =
 * Added a compact Shortlinker statistics widget to the WordPress dashboard.

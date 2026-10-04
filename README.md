@@ -1,6 +1,6 @@
 # Shortlinker
 
-[![Version](https://img.shields.io/badge/version-0.3.3-7457ff)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.4-7457ff)](CHANGELOG.md)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-19d3da)](LICENSE)
 [![CI](https://github.com/TheLibertyWolf/shortlinker/actions/workflows/ci.yml/badge.svg)](https://github.com/TheLibertyWolf/shortlinker/actions/workflows/ci.yml)
@@ -45,6 +45,8 @@ Create a dedicated client restricted to the WordPress server IP and required
 domain, then paste the one-time JSON connection block into **Settings →
 Shortlinker**. The plugin supports posts, pages, public custom post types,
 delegated users, list columns, controlled bulk generation, and click analytics.
+Automatic generation can be enabled independently per public content type for
+the first transition to the published status.
 
 ## Development
 

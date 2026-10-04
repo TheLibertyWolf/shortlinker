@@ -33,6 +33,7 @@ function head(title: string, turnstile = false, locale: Locale = "en", pwa = fal
 
 const navItems = [
   ["/admin", "speedometer2", "Overview", ""],
+  ["/admin/stats", "bar-chart-line", "Statistics", "stats.read"],
   ["/admin/links", "link-45deg", "Links", "links.read"],
   ["/admin/domains", "globe2", "Domains", "domains.read"],
   ["/admin/users", "people", "Users", "users.read"],
@@ -180,5 +181,6 @@ export function statusBadge(status: string): string {
 }
 
 export function pagination(page: number, hasNext: boolean, base: string, locale: Locale = "en"): string {
-  return `<nav class="d-flex justify-content-between mt-4"><a class="btn btn-outline-secondary ${page <= 1 ? "disabled" : ""}" href="${base}?page=${page - 1}">${icon("arrow-left")} ${translate(locale,"Previous")}</a><span class="text-secondary align-self-center">${translate(locale,"Page")} ${page}</span><a class="btn btn-outline-secondary ${!hasNext ? "disabled" : ""}" href="${base}?page=${page + 1}">${translate(locale,"Next")} ${icon("arrow-right")}</a></nav>`;
+  const separator = base.includes("?") ? "&amp;" : "?";
+  return `<nav class="d-flex justify-content-between mt-4"><a class="btn btn-outline-secondary ${page <= 1 ? "disabled" : ""}" href="${base}${separator}page=${page - 1}">${icon("arrow-left")} ${translate(locale,"Previous")}</a><span class="text-secondary align-self-center">${translate(locale,"Page")} ${page}</span><a class="btn btn-outline-secondary ${!hasNext ? "disabled" : ""}" href="${base}${separator}page=${page + 1}">${translate(locale,"Next")} ${icon("arrow-right")}</a></nav>`;
 }

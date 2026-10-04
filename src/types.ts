@@ -6,6 +6,8 @@ export type UserSession = {
   displayName: string;
   locale: "en" | "fr";
   permissions: string[];
+  allDomains: boolean;
+  domainIds: string[];
   mfaVerified: boolean;
   requirePasswordChange: boolean;
   csrfToken: string;

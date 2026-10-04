@@ -1,12 +1,12 @@
 {
   "name": "Shortlinker",
   "slug": "shortlinker",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "homepage": "https://github.com/TheLibertyWolf/shortlinker",
   "download_url": "https://shurl.be/assets/downloads/shortlinker-wordpress.zip",
   "requires": "6.5",
   "requires_php": "7.4",
   "tested": "6.7",
   "description": "Generate and monitor shurl.be shortlinks directly from WordPress.",
-  "changelog": "1.2.0 adds a local dashboard statistics widget, cached batch analytics, unlimited bulk generation with live progress and logs, and complete French/English support."
+  "changelog": "1.3.0 adds per-type automatic generation and copy buttons, and removes API/statistics aggregation from WordPress page loads for fast dashboards and article lists."
 }

@@ -67,9 +67,11 @@ export async function loadSession(request: FastifyRequest): Promise<UserSession 
   const result = await db.query<{
     session_id: string; user_id: string; username: string; email: string; display_name: string; locale: "en" | "fr";
     csrf_token: string; mfa_verified: boolean; require_password_change: boolean; permissions: string[];
+    all_domains: boolean; domain_ids: string[];
   }>(
     `SELECT s.id AS session_id, u.id AS user_id, u.username::text, u.email::text, u.display_name, u.locale, u.require_password_change,
-            s.csrf_token, s.mfa_verified,
+            s.csrf_token, s.mfa_verified, u.all_domains,
+            ARRAY(SELECT uda.domain_id::text FROM user_domain_access uda WHERE uda.user_id=u.id) AS domain_ids,
             ARRAY(
               SELECT DISTINCT rp.permission_code
               FROM user_roles ur JOIN role_permissions rp ON rp.role_id = ur.role_id
@@ -90,7 +92,8 @@ export async function loadSession(request: FastifyRequest): Promise<UserSession 
   void db.query("UPDATE sessions SET last_seen_at = now() WHERE id = $1 AND last_seen_at < now() - interval '5 minutes'", [row.session_id]);
   return {
     sessionId: row.session_id, userId: row.user_id, username: row.username, email: row.email, displayName: row.display_name, locale: row.locale,
-    permissions: row.permissions ?? [], mfaVerified: row.mfa_verified, requirePasswordChange: row.require_password_change, csrfToken: row.csrf_token
+    permissions: row.permissions ?? [], allDomains: row.all_domains, domainIds: row.domain_ids ?? [],
+    mfaVerified: row.mfa_verified, requirePasswordChange: row.require_password_change, csrfToken: row.csrf_token
   };
 }
 

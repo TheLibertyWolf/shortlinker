@@ -4,6 +4,17 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-10-04
+
+### Added
+
+- Existing secondary domains can switch between the main shurl.be homepage and a custom HTTPS homepage from the domain management table.
+- Homepage changes enforce CSRF, `domains.write`, per-user domain scope and redirect-loop validation, and write an audit event.
+
+### Changed
+
+- The domain list now shows the effective homepage behaviour and a compact inline editor for writable domains.
+
 ## [0.3.8] - 2026-10-04
 
 ### Added

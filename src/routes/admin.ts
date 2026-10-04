@@ -339,10 +339,22 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const session = await sessionFor(request, reply, "domains.read"); if (!session) return;
     const scope = domainScope(session);
     const domains = await db.query("SELECT * FROM domains WHERE ($1::uuid[] IS NULL OR id=ANY($1)) ORDER BY is_primary DESC,created_at", [scope]);
-    const rows = domains.rows.map((domain) => `<tr><td><div class="fw-bold">${escapeHtml(domain.hostname)} ${domain.is_primary ? '<span class="badge text-bg-primary">Primary</span>' : ""}</div><div class="small text-secondary">_shurl.${escapeHtml(domain.hostname)}</div><div class="small text-secondary mt-1"><i class="bi bi-house-door"></i> ${escapeHtml(domain.homepage_redirect||"Local homepage")}</div></td><td>${statusBadge(domain.status)}</td><td><code>shurl-verification=${escapeHtml(domain.verification_token)}</code></td><td>${domain.verified_at ? new Date(domain.verified_at).toLocaleString(localeTag(session.locale)) : "—"}</td><td class="text-end"><form method="post" action="/admin/domains/${domain.id}/verify">${csrfField(session.csrfToken)}<button class="btn btn-sm btn-outline-primary">Verify DNS</button></form></td></tr>`).join("");
+    const canWrite = session.permissions.includes("domains.write");
+    const primaryHomepage = config.PUBLIC_ORIGIN.replace(/\/$/, "");
+    const rows = domains.rows.map((domain) => {
+      const homepage = String(domain.homepage_redirect ?? "").replace(/\/$/, "");
+      const usesDefaultHomepage = !homepage || homepage === primaryHomepage;
+      const homepageEditor = domain.is_primary
+        ? `<div class="domain-homepage-fixed"><i class="bi bi-house-check"></i><div><strong>Main shurl.be homepage</strong><small>Primary domain behaviour is fixed</small></div></div>`
+        : canWrite
+          ? `<form method="post" action="/admin/domains/${domain.id}/homepage" class="domain-homepage-form">${csrfField(session.csrfToken)}<select class="form-select form-select-sm" name="homepage_mode" data-homepage-mode><option value="default" ${usesDefaultHomepage?"selected":""}>Main shurl.be homepage</option><option value="custom" ${!usesDefaultHomepage?"selected":""}>Custom HTTPS URL</option></select><input class="form-control form-control-sm" type="url" name="homepage_redirect" value="${escapeHtml(usesDefaultHomepage?"":homepage)}" placeholder="https://www.example.com" data-homepage-custom ${usesDefaultHomepage?"disabled":""}><button class="btn btn-sm btn-outline-primary"><i class="bi bi-check2"></i> Save homepage</button></form>`
+          : `<div class="domain-homepage-fixed"><i class="bi bi-house-door"></i><div><strong>${usesDefaultHomepage?"Main shurl.be homepage":"Custom HTTPS URL"}</strong><small>${escapeHtml(usesDefaultHomepage?primaryHomepage:homepage)}</small></div></div>`;
+      const verify = canWrite ? `<form method="post" action="/admin/domains/${domain.id}/verify">${csrfField(session.csrfToken)}<button class="btn btn-sm btn-outline-primary">Verify DNS</button></form>` : "";
+      return `<tr><td><div class="fw-bold">${escapeHtml(domain.hostname)} ${domain.is_primary ? '<span class="badge text-bg-primary">Primary</span>' : ""}</div><div class="small text-secondary">_shurl.${escapeHtml(domain.hostname)}</div></td><td>${statusBadge(domain.status)}</td><td class="domain-homepage-cell">${homepageEditor}</td><td><code>shurl-verification=${escapeHtml(domain.verification_token)}</code></td><td>${domain.verified_at ? new Date(domain.verified_at).toLocaleString(localeTag(session.locale)) : "—"}</td><td class="text-end">${verify}</td></tr>`;
+    }).join("");
     const message = queryMessage(request);
     const create = session.permissions.includes("domains.write") && session.allDomains ? `<form method="post" action="/admin/domains" class="row g-2 mb-4">${csrfField(session.csrfToken)}<div class="col-md-3"><label class="form-label">Domain</label><input class="form-control" name="hostname" placeholder="links.example.com" required></div><div class="col-md-3"><label class="form-label">Homepage behaviour</label><select class="form-select" name="homepage_mode" data-homepage-mode><option value="default">Main shurl.be homepage</option><option value="custom">Custom HTTPS URL</option></select></div><div class="col-md-4"><label class="form-label">Custom URL</label><input class="form-control" type="url" name="homepage_redirect" placeholder="https://www.example.com" data-homepage-custom disabled></div><div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100">Attach domain</button></div></form>` : "";
-    const content = `${alert(message.message,message.kind)}${create}<div class="alert alert-info border-0"><i class="bi bi-info-circle me-2"></i>Add the exact TXT value shown below at <strong>_shurl.your-domain</strong>. HTTPS and shortlinks remain disabled until verification succeeds.</div><div class="card panel-card"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Domain</th><th>Status</th><th>Required TXT value</th><th>Verified</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    const content = `${alert(message.message,message.kind)}${create}<div class="alert alert-info border-0"><i class="bi bi-info-circle me-2"></i>Add the exact TXT value shown below at <strong>_shurl.your-domain</strong>. HTTPS and shortlinks remain disabled until verification succeeds.</div><div class="card panel-card"><div class="table-responsive"><table class="table align-middle mb-0 domain-table"><thead><tr><th>Domain</th><th>Status</th><th>Homepage behaviour</th><th>Required TXT value</th><th>Verified</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
     return reply.type("text/html").send(adminLayout("Domains", "/admin/domains", session, content));
   });
 
@@ -366,6 +378,27 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     if(!canAccessDomain(session,request.params.id))return reply.code(403).type("text/plain").send("This domain is not assigned to your account.");
     const result=await verifyDomain(request.params.id); await audit(request,"domain.verification",{actorUserId:session.userId,targetType:"domain",targetId:request.params.id,outcome:result.verified?"success":"failure",metadata:{message:result.message}});
     return reply.redirect(`/admin/domains?${result.verified?"ok":"error"}=${encodeURIComponent(result.message)}`,303);
+  });
+
+  app.post<{Params:{id:string}}>("/admin/domains/:id/homepage", async (request, reply) => {
+    const session=await sessionFor(request,reply,"domains.write"); if(!session||!requireCsrfOrReply(request,reply,session))return;
+    if(!canAccessDomain(session,request.params.id))return reply.code(403).type("text/plain").send("This domain is not assigned to your account.");
+    try {
+      const domainResult=await db.query<{hostname:string;is_primary:boolean}>("SELECT hostname::text,is_primary FROM domains WHERE id=$1",[request.params.id]);
+      const domain=domainResult.rows[0];
+      if(!domain)return reply.code(404).type("text/plain").send("Domain not found");
+      if(domain.is_primary)throw new Error("The primary domain always serves the shurl.be homepage");
+      const body=request.body as Record<string,string>;
+      const mode=body.homepage_mode==="custom"?"custom":"default";
+      const requested=mode==="custom"?String(body.homepage_redirect??"").trim():config.PUBLIC_ORIGIN;
+      if(mode==="custom"&&!requested)throw new Error("Enter the custom homepage URL");
+      const homepageRedirect=validateHomepageRedirect(requested,domain.hostname);
+      await db.query("UPDATE domains SET homepage_redirect=$2,updated_at=now() WHERE id=$1",[request.params.id,homepageRedirect]);
+      await audit(request,"domain.homepage.updated",{actorUserId:session.userId,targetType:"domain",targetId:request.params.id,metadata:{hostname:domain.hostname,mode}});
+      return reply.redirect(`/admin/domains?ok=${encodeURIComponent("Homepage behaviour updated")}`,303);
+    } catch(error) {
+      return reply.redirect(`/admin/domains?error=${encodeURIComponent(error instanceof Error?error.message:"Unable to update homepage behaviour")}`,303);
+    }
   });
 
   app.get("/admin/users", async (request, reply) => {

@@ -4,6 +4,14 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-10-04
+
+### Changed
+
+- Link creation accepts safe compatibility aliases commonly used by integrations: `url`/`target`, `shortcode`/`code`, and snake-case option names.
+- Numeric and boolean form values, comma-separated tags, and `null` optional fields are normalized before strict validation.
+- API validation failures now return a concise field-level message and write a value-free audit entry for diagnosis.
+
 ## [0.3.4] - 2026-10-04
 
 ### Added

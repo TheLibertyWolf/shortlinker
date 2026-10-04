@@ -52,7 +52,33 @@ async function authenticate(request: FastifyRequest, reply: FastifyReply, scope:
   return client;
 }
 
-const createSchema = z.object({
+function normalizeCreatePayload(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const input = value as Record<string, unknown>;
+  const normalized: Record<string, unknown> = {
+    ...input,
+    domain: input.domain ?? input.hostname,
+    destination: input.destination ?? input.url ?? input.target,
+    slug: input.slug ?? input.shortcode ?? input.code,
+    redirectType: input.redirectType ?? input.redirect_type,
+    expiresAt: input.expiresAt ?? input.expires_at,
+    maxClicks: input.maxClicks ?? input.max_clicks,
+    passQuery: input.passQuery ?? input.pass_query,
+  };
+  if (normalized.slug === null || normalized.slug === "") delete normalized.slug;
+  if (normalized.redirectType === null || normalized.redirectType === "") delete normalized.redirectType;
+  if (normalized.expiresAt === null || normalized.expiresAt === "") delete normalized.expiresAt;
+  if (normalized.maxClicks === null || normalized.maxClicks === "") delete normalized.maxClicks;
+  if (normalized.passQuery === null || normalized.passQuery === "") delete normalized.passQuery;
+  if (normalized.tags === null || normalized.tags === "") delete normalized.tags;
+  if (typeof normalized.redirectType === "string" && /^\d+$/.test(normalized.redirectType)) normalized.redirectType = Number(normalized.redirectType);
+  if (typeof normalized.maxClicks === "string" && /^\d+$/.test(normalized.maxClicks)) normalized.maxClicks = Number(normalized.maxClicks);
+  if (typeof normalized.passQuery === "string") normalized.passQuery = ["1", "true", "yes", "on"].includes(normalized.passQuery.toLowerCase());
+  if (typeof normalized.tags === "string") normalized.tags = normalized.tags.split(",").map((tag) => tag.trim()).filter(Boolean);
+  return normalized;
+}
+
+const createObjectSchema = z.object({
   domain: z.string().min(3).max(253),
   destination: z.url().max(4096),
   slug: z.string().optional(),
@@ -63,13 +89,20 @@ const createSchema = z.object({
   tags: z.array(z.string().max(50)).max(20).default([])
 });
 
+const createSchema = z.preprocess(normalizeCreatePayload, createObjectSchema);
+
 const statsBatchSchema = z.object({
   ids: z.array(z.uuid()).min(1).max(100)
 });
 
 const createBatchSchema = z.object({
-  links: z.array(createSchema.extend({ reference: z.string().min(1).max(64) })).min(1).max(50)
+  links: z.array(z.preprocess(normalizeCreatePayload, createObjectSchema.extend({ reference: z.string().min(1).max(64) }))).min(1).max(50)
 });
+
+function validationError(error: z.ZodError) {
+  const message = error.issues.slice(0, 4).map((issue) => `${issue.path.join(".") || "request"}: ${issue.message}`).join("; ");
+  return { error: { code: "validation_error", message: message || "Request validation failed", details: error.flatten() } };
+}
 
 export const apiRoutes: FastifyPluginAsync = async (app) => {
   app.get("/api/v1", async (_request, reply) => reply.send({ name: "Shortlinker API", version: "v1", documentation: "https://shurl.be/api/v1/openapi.json" }));
@@ -103,7 +136,13 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
     const client = await authenticate(request, reply, "links:write");
     if (!client) return;
     const parsed = createSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(422).send({ error: { code: "validation_error", details: parsed.error.flatten() } });
+    if (!parsed.success) {
+      await audit(request, "api.validation.denied", {
+        apiClientId: client.id, outcome: "failure",
+        metadata: { endpoint: "links.create", fields: parsed.error.issues.map((issue) => issue.path.join(".") || "request") }
+      });
+      return reply.code(422).send(validationError(parsed.error));
+    }
     const input = parsed.data;
     const requestHash = sha256(JSON.stringify(input));
     const idempotencyKey = String(request.headers["idempotency-key"] ?? "").slice(0, 128);
@@ -154,7 +193,13 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
     const client = await authenticate(request, reply, "links:write");
     if (!client) return;
     const parsed = createBatchSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(422).send({ error: { code: "validation_error", details: parsed.error.flatten() } });
+    if (!parsed.success) {
+      await audit(request, "api.validation.denied", {
+        apiClientId: client.id, outcome: "failure",
+        metadata: { endpoint: "links.batch", fields: parsed.error.issues.map((issue) => issue.path.join(".") || "request") }
+      });
+      return reply.code(422).send(validationError(parsed.error));
+    }
     const requestHash = sha256(JSON.stringify(parsed.data));
     const idempotencyKey = String(request.headers["idempotency-key"] ?? "").slice(0, 128);
     if (idempotencyKey) {

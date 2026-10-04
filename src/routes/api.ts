@@ -61,6 +61,14 @@ const createSchema = z.object({
   tags: z.array(z.string().max(50)).max(20).default([])
 });
 
+const statsBatchSchema = z.object({
+  ids: z.array(z.uuid()).min(1).max(100)
+});
+
+const createBatchSchema = z.object({
+  links: z.array(createSchema.extend({ reference: z.string().min(1).max(64) })).min(1).max(50)
+});
+
 export const apiRoutes: FastifyPluginAsync = async (app) => {
   app.get("/api/v1", async (_request, reply) => reply.send({ name: "Shortlinker API", version: "v1", documentation: "https://shurl.be/api/v1/openapi.json" }));
 
@@ -140,6 +148,68 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(201).send(response);
   });
 
+  app.post("/api/v1/links/batch", async (request, reply) => {
+    const client = await authenticate(request, reply, "links:write");
+    if (!client) return;
+    const parsed = createBatchSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(422).send({ error: { code: "validation_error", details: parsed.error.flatten() } });
+    const requestHash = sha256(JSON.stringify(parsed.data));
+    const idempotencyKey = String(request.headers["idempotency-key"] ?? "").slice(0, 128);
+    if (idempotencyKey) {
+      const existing = await db.query<{ request_hash: string; status_code: number; response: unknown }>(
+        "SELECT request_hash,status_code,response FROM api_idempotency WHERE api_client_id=$1 AND idempotency_key=$2", [client.id, idempotencyKey]
+      );
+      const cached = existing.rows[0];
+      if (cached) {
+        if (cached.request_hash !== requestHash) return reply.code(409).send({ error: { code: "idempotency_conflict", message: "Key was used with a different request" } });
+        return reply.code(cached.status_code).send(cached.response);
+      }
+    }
+    const requestedDomains = [...new Set(parsed.data.links.map((item) => item.domain.toLowerCase()))];
+    const domainRows = await db.query<{ id: string; hostname: string }>(
+      "SELECT id,hostname::text FROM domains WHERE hostname=ANY($1::text[]) AND status='active' AND ($2::uuid[]='{}' OR id=ANY($2))",
+      [requestedDomains, client.domain_ids]
+    );
+    const domainByHostname = new Map(domainRows.rows.map((row) => [row.hostname, row]));
+    const allDomains = await db.query<{ hostname: string }>("SELECT hostname::text FROM domains");
+    const knownHostnames = allDomains.rows.map((row) => row.hostname);
+    const items: Array<Record<string, unknown>> = [];
+    for (const input of parsed.data.links) {
+      try {
+        const domain = domainByHostname.get(input.domain.toLowerCase());
+        if (!domain) { items.push({ reference: input.reference, status: "error", message: "Domain unavailable for this API client" }); continue; }
+        const destination = validateDestination(input.destination, knownHostnames);
+        let slug = input.slug ? validateSlug(input.slug) : generateSlug();
+        let created: Record<string, unknown> | undefined;
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          try {
+            const result = await db.query(
+              `INSERT INTO links (domain_id,slug,destination,redirect_type,expires_at,max_clicks,pass_query,tags)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,slug,destination,status,created_at AS "createdAt"`,
+              [domain.id, slug, destination, input.redirectType, input.expiresAt ?? null, input.maxClicks ?? null, input.passQuery, input.tags]
+            );
+            created = { ...result.rows[0], domain: domain.hostname, shortUrl: `https://${domain.hostname}/${slug}` };
+            break;
+          } catch (error) {
+            if (String(error).includes("links_domain_id_slug_key") && !input.slug) { slug = generateSlug(); continue; }
+            throw error;
+          }
+        }
+        if (!created) throw new Error("Unable to allocate a unique slug");
+        items.push({ reference: input.reference, status: "success", data: created });
+        await audit(request, "api.link.created", { apiClientId: client.id, targetType: "link", targetId: String(created.id), metadata: { batch: true } });
+      } catch (error) {
+        items.push({ reference: input.reference, status: "error", message: error instanceof Error ? error.message : "Creation failed" });
+      }
+    }
+    const response = { data: { items } };
+    if (idempotencyKey) await db.query(
+      "INSERT INTO api_idempotency (api_client_id,idempotency_key,request_hash,status_code,response) VALUES ($1,$2,$3,200,$4::jsonb)",
+      [client.id, idempotencyKey, requestHash, JSON.stringify(response)]
+    );
+    return reply.send(response);
+  });
+
   app.get<{ Params: { id: string } }>("/api/v1/links/:id/stats", async (request, reply) => {
     const client = await authenticate(request, reply, "stats:read");
     if (!client) return;
@@ -169,6 +239,48 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ data: { ...result.rows[0], countries: countries.rows, timeline: timeline.rows, browsers: browsers.rows, devices: devices.rows, referrers: referrers.rows } });
   });
 
+  app.post("/api/v1/stats/batch", async (request, reply) => {
+    const client = await authenticate(request, reply, "stats:read");
+    if (!client) return;
+    const parsed = statsBatchSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(422).send({ error: { code: "validation_error", details: parsed.error.flatten() } });
+    const allowed = await db.query<{ id: string }>(
+      `SELECT id FROM links WHERE id=ANY($1::uuid[]) AND deleted_at IS NULL
+       AND ($2::uuid[]='{}' OR domain_id=ANY($2))`, [parsed.data.ids, client.domain_ids]
+    );
+    const ids = allowed.rows.map((row) => row.id);
+    if (!ids.length) return reply.send({ data: { links: [], countries: [], timeline: [], browsers: [], devices: [], referrers: [] } });
+    const [links, countries, timeline, browsers, devices, referrers] = await Promise.all([
+      db.query(
+        `SELECT l.id, count(e.link_id)::bigint AS clicks,
+                count(DISTINCT e.visitor_hash)::bigint AS unique_visitors,
+                count(e.link_id) FILTER (WHERE e.visitor_class='human')::bigint AS humans,
+                count(e.link_id) FILTER (WHERE e.visitor_class='robot')::bigint AS robots
+         FROM links l LEFT JOIN click_events e ON e.link_id=l.id
+         WHERE l.id=ANY($1::uuid[]) GROUP BY l.id`, [ids]
+      ),
+      db.query(
+        "SELECT country_code,count(*)::bigint AS clicks FROM click_events WHERE link_id=ANY($1::uuid[]) GROUP BY country_code ORDER BY clicks DESC LIMIT 20", [ids]
+      ),
+      db.query(
+        "SELECT to_char(date_trunc('day',clicked_at),'YYYY-MM-DD') AS day,count(*)::bigint AS clicks FROM click_events WHERE link_id=ANY($1::uuid[]) AND clicked_at>=now()-interval '29 days' GROUP BY 1 ORDER BY 1", [ids]
+      ),
+      db.query(
+        "SELECT coalesce(nullif(browser,''),'Unknown') AS name,count(*)::bigint AS clicks FROM click_events WHERE link_id=ANY($1::uuid[]) GROUP BY 1 ORDER BY clicks DESC LIMIT 10", [ids]
+      ),
+      db.query(
+        "SELECT coalesce(nullif(device_type,''),'Unknown') AS name,count(*)::bigint AS clicks FROM click_events WHERE link_id=ANY($1::uuid[]) GROUP BY 1 ORDER BY clicks DESC LIMIT 10", [ids]
+      ),
+      db.query(
+        "SELECT coalesce(nullif(referrer,''),'Direct') AS name,count(*)::bigint AS clicks FROM click_events WHERE link_id=ANY($1::uuid[]) GROUP BY 1 ORDER BY clicks DESC LIMIT 10", [ids]
+      )
+    ]);
+    return reply.send({ data: {
+      links: links.rows, countries: countries.rows, timeline: timeline.rows,
+      browsers: browsers.rows, devices: devices.rows, referrers: referrers.rows
+    } });
+  });
+
   app.delete<{ Params: { id: string } }>("/api/v1/links/:id", async (request, reply) => {
     const client = await authenticate(request, reply, "links:delete");
     if (!client) return;
@@ -190,7 +302,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
     components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer" } } }, security: [{ bearerAuth: [] }],
     paths: {
       "/links": { get: { summary: "List links" }, post: { summary: "Create a shortlink" } },
+      "/links/batch": { post: { summary: "Create up to 50 shortlinks in one request" } },
       "/links/{id}/stats": { get: { summary: "Read link analytics" } },
+      "/stats/batch": { post: { summary: "Read analytics for up to 100 links in one request" } },
       "/links/{id}": { delete: { summary: "Delete a link" } },
       "/domains": { get: { summary: "List available domains" } }
     }

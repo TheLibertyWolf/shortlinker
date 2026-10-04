@@ -4,6 +4,21 @@ All notable changes are documented here. This project follows semantic versionin
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-04
+
+### Added
+
+- WordPress plugin 1.2.0 with a compact statistics widget on the main WordPress dashboard.
+- Live progress, per-item terminal logs, automatic request retries and a safe stop control for bulk shortlink generation.
+- French translations for the complete WordPress interface, with English as the default language.
+
+### Changed
+
+- WordPress bulk generation now uses a cursor-based AJAX queue with no 1,000-item cap, suitable for libraries containing tens of thousands of posts.
+- Dashboard summaries aggregate local WordPress metadata and do not generate API traffic when the dashboard loads.
+- The WordPress statistics page refreshes up to 100 displayed links through one cached batch request instead of one request per link.
+- Country, browser, device and referrer summaries now appear before the detailed performance table.
+
 ## [0.3.1] - 2026-10-04
 
 ### Added

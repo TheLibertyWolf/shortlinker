@@ -4,7 +4,7 @@ Tags: shortlink, analytics, url shortener, shurl, api
 Requires at least: 6.5
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.1
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -31,6 +31,14 @@ Every state-changing action uses WordPress capabilities and nonces. Protect Word
 and database access because the API token is stored in the WordPress options table.
 
 == Changelog ==
+
+= 1.2.0 =
+* Added a compact Shortlinker statistics widget to the WordPress dashboard.
+* Rebuilt bulk generation as an unlimited AJAX queue with live progress, safe stop, retries and a terminal-style activity log.
+* Optimized dashboard metrics to use local WordPress data without triggering API calls on page load.
+* Batched statistics refreshes into one cached API request for up to 100 displayed links.
+* Added complete French translations with English as the default language.
+* Moved country, browser, device and referrer summaries above the detailed performance table.
 
 = 1.1.1 =
 * Added a native Gutenberg Document sidebar panel for generating, displaying and regenerating shortlinks.

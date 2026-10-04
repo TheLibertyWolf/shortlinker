@@ -30,7 +30,7 @@
     };
 
     return el(PluginDocumentSettingPanel, { name: "shortlinker", title: "Shortlinker", className: "shortlinker-editor-panel" },
-      url ? el(TextControl, { label: "Shortlink", value: url, readOnly: true, onChange: () => {} }) : el("p", null, "No shortlink yet."),
+      url ? el(TextControl, { label: config.shortlinkLabel, value: url, readOnly: true, onChange: () => {} }) : el("p", null, config.noShortlink),
       url ? el("p", null, el("strong", null, String(clicks)), ` ${config.clickLabel}`) : null,
       !published ? el(Notice, { status: "warning", isDismissible: false }, config.publishFirst) : null,
       el(Button, { variant: "primary", disabled: busy || !published, isBusy: busy, onClick: generate }, busy ? config.generating : (url ? config.regenerate : config.generate)),

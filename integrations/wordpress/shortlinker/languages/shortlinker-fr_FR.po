@@ -1,0 +1,338 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Shortlinker 1.2.0\n"
+"Language: fr_FR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "%s ago"
+msgstr "il y a %s"
+
+msgid "302 is recommended for editable content."
+msgstr "Le code 302 est recommandé pour les contenus modifiables."
+
+msgid "API connection"
+msgstr "Connexion API"
+
+msgid "API error (%d)."
+msgstr "Erreur API (%d)."
+
+msgid "Access"
+msgstr "Accès"
+
+msgid "Administrators only."
+msgstr "Réservé aux administrateurs."
+
+msgid "An update is available from the WordPress Plugins page."
+msgstr "Une mise à jour est disponible depuis la page des extensions WordPress."
+
+msgid "Browsers"
+msgstr "Navigateurs"
+
+msgid "Bulk generation"
+msgstr "Génération en masse"
+
+msgid "Bulk generation complete."
+msgstr "Génération en masse terminée."
+
+msgid "Check for updates now"
+msgstr "Rechercher les mises à jour"
+
+msgid "Clicks"
+msgstr "Clics"
+
+msgid "Comma-separated; a wp:post-type tag is added automatically."
+msgstr "Séparées par des virgules ; une étiquette wp:type-de-contenu est ajoutée automatiquement."
+
+msgid "Configuration and editor"
+msgstr "Configuration et éditeur"
+
+msgid "Connected to %s"
+msgstr "Connecté à %s"
+
+msgid "Connection"
+msgstr "Connexion"
+
+msgid "Connection block"
+msgstr "Bloc de connexion"
+
+msgid "Content"
+msgstr "Contenu"
+
+msgid "Content & defaults"
+msgstr "Contenus et valeurs par défaut"
+
+msgid "Content type"
+msgstr "Type de contenu"
+
+msgid "Content types"
+msgstr "Types de contenu"
+
+msgid "Content types and defaults"
+msgstr "Types de contenu et valeurs par défaut"
+
+msgid "Counting eligible content…"
+msgstr "Comptage des contenus éligibles…"
+
+msgid "Create a dedicated client in shurl.be > API clients, copy its WordPress connection block and paste it below."
+msgstr "Créez un client dédié dans shurl.be > Clients API, copiez son bloc de connexion WordPress et collez-le ci-dessous."
+
+msgid "Create, distribute and understand every shortlink without leaving WordPress."
+msgstr "Créez, diffusez et analysez chaque lien court sans quitter WordPress."
+
+msgid "Daily click chart"
+msgstr "Graphique quotidien des clics"
+
+msgid "Daily clicks aggregated across connected content."
+msgstr "Clics quotidiens cumulés sur les contenus connectés."
+
+msgid "Danger zone"
+msgstr "Zone dangereuse"
+
+msgid "Default redirect"
+msgstr "Redirection par défaut"
+
+msgid "Default tags"
+msgstr "Étiquettes par défaut"
+
+msgid "Delegated access"
+msgstr "Accès délégués"
+
+msgid "Devices"
+msgstr "Appareils"
+
+msgid "Direct"
+msgstr "Direct"
+
+msgid "Full-width performance intelligence for connected WordPress content."
+msgstr "Analyse complète des performances des contenus WordPress connectés."
+
+msgid "Generate all missing shortlinks"
+msgstr "Générer tous les liens courts manquants"
+
+msgid "Generate every missing shortlink for this content type?"
+msgstr "Générer tous les liens courts manquants pour ce type de contenu ?"
+
+msgid "Generate shortlink"
+msgstr "Générer le lien court"
+
+msgid "Generating…"
+msgstr "Génération…"
+
+msgid "Grant configuration/editor access and statistics access independently, by WordPress role or individual user. Administrators always retain both."
+msgstr "Accordez séparément l’accès à la configuration et à l’éditeur, ainsi qu’aux statistiques, par rôle WordPress ou par utilisateur. Les administrateurs conservent toujours les deux accès."
+
+msgid "Human / robot"
+msgstr "Humain / robot"
+
+msgid "Humans"
+msgstr "Humains"
+
+msgid "Incomplete API response."
+msgstr "Réponse API incomplète."
+
+msgid "Individual users"
+msgstr "Utilisateurs individuels"
+
+msgid "Installed: %s"
+msgstr "Installée : %s"
+
+msgid "Invalid Shortlinker update information."
+msgstr "Informations de mise à jour Shortlinker invalides."
+
+msgid "Invalid connection block. Copy it again from Shortlinker > API clients."
+msgstr "Bloc de connexion invalide. Copiez-le à nouveau depuis Shortlinker > Clients API."
+
+msgid "Invalid content type."
+msgstr "Type de contenu invalide."
+
+msgid "Last 30 days"
+msgstr "30 derniers jours"
+
+msgid "Last statistics sync"
+msgstr "Dernière synchronisation"
+
+msgid "Latest: %s"
+msgstr "Dernière version : %s"
+
+msgid "Live statistics could not be refreshed: %s. Cached data is displayed."
+msgstr "Les statistiques en direct n’ont pas pu être actualisées : %s. Les données en cache sont affichées."
+
+msgid "Never"
+msgstr "Jamais"
+
+msgid "No browser data yet."
+msgstr "Aucune donnée de navigateur pour le moment."
+
+msgid "No content type is enabled in Shortlinker settings."
+msgstr "Aucun type de contenu n’est activé dans les réglages Shortlinker."
+
+msgid "No device data yet."
+msgstr "Aucune donnée d’appareil pour le moment."
+
+msgid "No geographic data yet."
+msgstr "Aucune donnée géographique pour le moment."
+
+msgid "No missing shortlinks for this content type."
+msgstr "Aucun lien court manquant pour ce type de contenu."
+
+msgid "No referrer data yet."
+msgstr "Aucune donnée de provenance pour le moment."
+
+msgid "No shortlink generated yet."
+msgstr "Aucun lien court généré pour le moment."
+
+msgid "No shortlink yet."
+msgstr "Aucun lien court pour le moment."
+
+msgid "No shortlinks have been generated yet."
+msgstr "Aucun lien court n’a encore été généré."
+
+msgid "No temporal data yet."
+msgstr "Aucune donnée temporelle pour le moment."
+
+msgid "Not configured"
+msgstr "Non configuré"
+
+msgid "Permission denied."
+msgstr "Permission refusée."
+
+msgid "Plugin updates"
+msgstr "Mises à jour de l’extension"
+
+msgid "Processes every published item without a shortlink in small background requests. Keep this page open while it runs. You can stop safely after the current batch and restart later."
+msgstr "Traite chaque contenu publié sans lien court par petites requêtes successives. Gardez cette page ouverte pendant l’opération. Vous pouvez arrêter après le lot en cours et reprendre plus tard."
+
+msgid "Publish the content before generating its shortlink."
+msgstr "Publiez le contenu avant de générer son lien court."
+
+msgid "Publish this content first."
+msgstr "Publiez d’abord ce contenu."
+
+msgid "Ready."
+msgstr "Prêt."
+
+msgid "Referrers"
+msgstr "Provenances"
+
+msgid "Regenerate"
+msgstr "Régénérer"
+
+msgid "Request failed; retrying…"
+msgstr "La requête a échoué ; nouvelle tentative…"
+
+msgid "Robots"
+msgstr "Robots"
+
+msgid "Roles"
+msgstr "Rôles"
+
+msgid "Save access"
+msgstr "Enregistrer les accès"
+
+msgid "Save and test connection"
+msgstr "Enregistrer et tester la connexion"
+
+msgid "Save defaults"
+msgstr "Enregistrer les valeurs par défaut"
+
+msgid "Settings saved."
+msgstr "Réglages enregistrés."
+
+msgid "Shortlink"
+msgstr "Lien court"
+
+msgid "Shortlinker"
+msgstr "Shortlinker"
+
+msgid "Shortlinker Stats"
+msgstr "Statistiques Shortlinker"
+
+msgid "Shortlink performance"
+msgstr "Performance des liens courts"
+
+msgid "Shortlinker is not connected."
+msgstr "Shortlinker n’est pas connecté."
+
+msgid "Shortlinker overview"
+msgstr "Vue d’ensemble Shortlinker"
+
+msgid "Shortlinker statistics"
+msgstr "Statistiques Shortlinker"
+
+msgid "Shortlinks"
+msgstr "Liens courts"
+
+msgid "Starting bulk generation…"
+msgstr "Démarrage de la génération en masse…"
+
+msgid "Statistics page"
+msgstr "Page des statistiques"
+
+msgid "Stop"
+msgstr "Arrêter"
+
+msgid "Stopped by the operator."
+msgstr "Arrêté par l’opérateur."
+
+msgid "Stopping after the current batch…"
+msgstr "Arrêt après le lot en cours…"
+
+msgid "The API URL must use HTTPS and target /api/v1."
+msgstr "L’URL de l’API doit utiliser HTTPS et cibler /api/v1."
+
+msgid "The current shortlink will stop working. Regenerate it?"
+msgstr "Le lien court actuel cessera de fonctionner. Le régénérer ?"
+
+msgid "The operation failed."
+msgstr "L’opération a échoué."
+
+msgid "The plugin is up to date."
+msgstr "L’extension est à jour."
+
+msgid "This content type is not enabled."
+msgstr "Ce type de contenu n’est pas activé."
+
+msgid "Top content"
+msgstr "Contenus les plus performants"
+
+msgid "Top countries"
+msgstr "Principaux pays"
+
+msgid "Unable to retrieve Shortlinker update information."
+msgstr "Impossible de récupérer les informations de mise à jour de Shortlinker."
+
+msgid "Unique"
+msgstr "Uniques"
+
+msgid "Unknown"
+msgstr "Inconnu"
+
+msgid "Untitled"
+msgstr "Sans titre"
+
+msgid "Version %s is available."
+msgstr "La version %s est disponible."
+
+msgid "View full statistics"
+msgstr "Voir toutes les statistiques"
+
+msgid "clicks"
+msgstr "clics"
+
+msgid "created"
+msgstr "créés"
+
+msgid "failed"
+msgstr "échoués"
+
+msgid "items remain and can be retried."
+msgstr "éléments restent à traiter et peuvent être relancés."
+
+msgid "linked"
+msgstr "liés"
+
+msgid "missing"
+msgstr "manquants"

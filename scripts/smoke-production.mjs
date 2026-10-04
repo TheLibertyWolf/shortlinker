@@ -10,6 +10,7 @@ const slug = `smoke-${Date.now().toString(36)}`;
 const idempotencyKey = `smoke-${randomBytes(12).toString("hex")}`;
 let clientId;
 let linkId;
+let batchLinkIds = [];
 
 const apiHeaders = {
   authorization: `Bearer ${token}`,
@@ -86,12 +87,47 @@ try {
   }
   assert(Number(stats?.data.clicks) >= 1, "analytics worker did not persist the click in time");
 
+  const batchKey = `smoke-batch-${randomBytes(12).toString("hex")}`;
+  const batchPayload = { links: [1, 2].map((number) => ({
+    reference: `batch-${number}`,
+    domain: hostname,
+    destination: `https://example.com/shortlinker-smoke-batch-${number}`,
+    slug: `${slug}-batch-${number}`,
+    tags: ["smoke-test", "batch"]
+  })) };
+  const batchResponse = await api("/api/v1/links/batch", {
+    method: "POST",
+    headers: { "content-type": "application/json", "idempotency-key": batchKey },
+    body: JSON.stringify(batchPayload)
+  });
+  assert(batchResponse.status === 200, `batch creation returned ${batchResponse.status}`);
+  const batchCreated = await batchResponse.json();
+  assert(batchCreated.data.items.length === 2 && batchCreated.data.items.every((item) => item.status === "success"), "batch creation returned incomplete items");
+  batchLinkIds = batchCreated.data.items.map((item) => item.data.id);
+
+  const batchRepeatResponse = await api("/api/v1/links/batch", {
+    method: "POST",
+    headers: { "content-type": "application/json", "idempotency-key": batchKey },
+    body: JSON.stringify(batchPayload)
+  });
+  const batchRepeated = await batchRepeatResponse.json();
+  assert(batchRepeatResponse.status === 200 && batchRepeated.data.items[0].data.id === batchLinkIds[0], "batch idempotency replay failed");
+
+  const batchStatsResponse = await api("/api/v1/stats/batch", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ids: [linkId, ...batchLinkIds] })
+  });
+  const batchStats = await batchStatsResponse.json();
+  assert(batchStatsResponse.status === 200 && batchStats.data.links.length === 3, "batch statistics returned incomplete data");
+
   const deleteResponse = await api(`/api/v1/links/${linkId}`, { method: "DELETE" });
   assert(deleteResponse.status === 204, `link deletion returned ${deleteResponse.status}`);
 
-  console.log(JSON.stringify({ ok: true, domains: domains.data.length, redirect: redirectResponse.status, clicks: Number(stats.data.clicks) }));
+  console.log(JSON.stringify({ ok: true, domains: domains.data.length, redirect: redirectResponse.status, clicks: Number(stats.data.clicks), batchCreated: batchLinkIds.length, batchStats: batchStats.data.links.length }));
 } finally {
   if (linkId) await db.query("DELETE FROM links WHERE id=$1", [linkId]);
+  if (batchLinkIds.length) await db.query("DELETE FROM links WHERE id=ANY($1::uuid[])", [batchLinkIds]);
   if (clientId) {
     await db.query("DELETE FROM audit_logs WHERE api_client_id=$1", [clientId]);
     await db.query("DELETE FROM api_clients WHERE id=$1", [clientId]);

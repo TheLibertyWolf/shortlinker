@@ -25,15 +25,15 @@
     "postinstall": "npm run assets"
   },
   "dependencies": {
-    "@fastify/cookie": "^11.0.2",
-    "@fastify/formbody": "^9.0.0",
-    "@fastify/helmet": "^13.0.2",
-    "@fastify/static": "^10.1.5",
+    "@fastify/cookie": "^11.1.3",
+    "@fastify/formbody": "^9.0.1",
+    "@fastify/helmet": "^13.2.0",
+    "@fastify/static": "^10.1.6",
     "@simplewebauthn/server": "^14.0.3",
     "argon2": "^0.45.1",
     "bootstrap": "^5.3.8",
-    "bootstrap-icons": "^1.13.1",
-    "fastify": "^5.6.1",
+    "bootstrap-icons": "^1.13.2",
+    "fastify": "^5.12.7",
     "geoip-lite": "^2.0.3",
     "ioredis": "^6.0.0",
     "ipaddr.js": "^2.2.0",
@@ -42,7 +42,7 @@
     "pg": "^8.16.3",
     "qrcode": "^1.5.4",
     "ua-parser-js": "^2.0.6",
-    "zod": "^4.1.12"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/geoip-lite": "^1.4.4",
